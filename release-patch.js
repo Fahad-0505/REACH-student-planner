@@ -220,3 +220,94 @@
 
   render();
 })();
+
+
+/* Curtin Unit Outline assessment schedule parser */
+(() => {
+  const genericDetectAssessments = detectAssessmentsFromText;
+
+  function inferOutlineYear(text='') {
+    const semester = String(text).match(/\bSemester\s+[12]\s+(20\d{2})\b/i);
+    if (semester) return Number(semester[1]);
+    const years = [...String(text).matchAll(/\b(20\d{2})\b/g)].map(m => Number(m[1])).filter(y => y >= 2020 && y <= 2040);
+    if (!years.length) return new Date().getFullYear();
+    const counts = new Map();
+    for (const y of years) counts.set(y, (counts.get(y) || 0) + 1);
+    return [...counts.entries()].sort((a,b) => b[1] - a[1])[0][0];
+  }
+
+  function monthNumber(name='') {
+    const months = {
+      jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,
+      jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,september:9,
+      oct:10,october:10,nov:11,november:11,dec:12,december:12
+    };
+    return months[String(name).toLowerCase()] || 0;
+  }
+
+  function parseCurtinDay(lines, start, year) {
+    let month = 0, day = 0;
+    const first = (lines[start] || '').replace(/^Day:\s*/i,'').trim();
+    const firstParts = first.split(/\s+/).filter(Boolean);
+    for (const part of firstParts) {
+      if (!month && monthNumber(part)) month = monthNumber(part);
+      else if (!day && /^\d{1,2}$/.test(part)) day = Number(part);
+    }
+    for (let j=start+1; j<Math.min(lines.length,start+3) && (!month || !day); j++) {
+      const parts = (lines[j] || '').split(/\s+/).filter(Boolean);
+      for (const part of parts) {
+        if (!month && monthNumber(part)) month = monthNumber(part);
+        else if (!day && /^\d{1,2}$/.test(part)) day = Number(part);
+      }
+    }
+    if (!month || !day) return '';
+    return String(year) + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+  }
+
+  function detectCurtinAssessmentSchedule(text='') {
+    const raw = String(text);
+    const match = raw.match(/Assessment Schedule([\s\S]*?)(?:\*Please refer|Detailed Information on assessment tasks)/i);
+    if (!match) return [];
+    const lines = match[1].split(/\n+/).map(x => x.replace(/\s+/g,' ').trim()).filter(Boolean);
+    const year = inferOutlineYear(raw);
+    const out = [];
+
+    for (let i=0; i<lines.length; i++) {
+      const row = lines[i].match(/^(\d+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*%$/);
+      if (!row) continue;
+
+      const taskNumber = Number(row[1]);
+      const title = row[2].trim();
+      const weight = Math.min(100, Number(row[3]));
+      let dueDate = '';
+      let dueTime = '17:00';
+      let week = '';
+
+      for (let j=i+1; j<Math.min(lines.length,i+10); j++) {
+        if (/^(\d+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*%$/.test(lines[j])) break;
+        const weekMatch = lines[j].match(/^Week:\s*(\d+)/i);
+        if (weekMatch) week = weekMatch[1];
+        if (/^Day:/i.test(lines[j])) dueDate = parseCurtinDay(lines,j,year) || dueDate;
+        if (/^Time:/i.test(lines[j])) dueTime = parseOutlineTime(lines[j]);
+      }
+
+      out.push({
+        title: title,
+        type: classifyAssessment(title),
+        weight: weight,
+        dueDate: dueDate,
+        dueTime: dueTime,
+        taskNumber: taskNumber,
+        week: week,
+        source: 'curtin-assessment-schedule'
+      });
+    }
+    return out;
+  }
+
+  detectAssessmentsFromText = function(text='') {
+    const curtin = detectCurtinAssessmentSchedule(text);
+    if (curtin.length) return curtin;
+    return genericDetectAssessments(text);
+  };
+})();
