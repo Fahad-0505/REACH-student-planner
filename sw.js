@@ -1,4 +1,4 @@
-const CACHE='reach-student-planner-v4';
+const CACHE='reach-student-planner-v5';
 const CORE=['./','./index.html','./release-patch.js','./manifest.webmanifest','./assets/favicon.svg'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)))});
 self.addEventListener('activate',e=>{e.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))]))});
