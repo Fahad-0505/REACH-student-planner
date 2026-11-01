@@ -103,4 +103,120 @@
     return `<div class="page-head"><div><div class="eyebrow">Planner</div><h1>A plan that fits you.</h1><div class="sub">Build around your life, not the other way round.</div></div><button class="btn btn-soft" data-nav="availability">Edit availability</button></div>
       <div class="card" style="background:linear-gradient(135deg,#20552f,#36783f);color:white"><div class="eyebrow" style="color:#c9f5d2">Room for real life</div><strong style="font-size:34px;display:block;margin:6px 0">6h 30m</strong><div>of 9h available · 2h 30m free</div></div>
       <div class="week" style="margin-top:16px">${days.map((d, idx) => `<div class="day ${idx === 2 ? 'today' : ''}"><strong>${d}</strong>${state.commitments.filter(c => c.day === d).map(c => `<div class="event ${c.kind}"><b>${c.time}</b><br>${esc(c.title)}</div>`).join('')}</div>`).join('')}</div>
-      <div class="card" style="margin-top:16px"><h2>Upcoming unit deadlines</h2><div class="sub">Dates confirmed from unit outlines and assignments.</div>${upcoming.length ? `<div class="deadline-list" sty
+      <div class="card" style="margin-top:16px"><h2>Upcoming unit deadlines</h2><div class="sub">Dates confirmed from unit outlines and assignments.</div>${upcoming.length ? `<div class="deadline-list" style="margin-top:12px">${upcoming.map(a => `<button class="deadline-item unit-open" data-open-assignment="${a.id}"><div class="status">${esc(a.unit)}</div><div class="row-main"><strong>${esc(a.title)}</strong><small>Due ${fmtDue(a.due)}</small></div><span class="chevron">›</span></button>`).join('')}</div>` : `<div class="empty">No upcoming deadlines yet.</div>`}</div>
+      <div class="callout" style="margin-top:16px"><h3>Let's spread things out</h3><p>Short blocks, a little buffer, no cramming.</p><button class="btn btn-primary" data-nav="today">▹ Start a ${state.focusMinutes}-min focus</button></div>`;
+  };
+
+  function wireCustomSettings(root) {
+    wireNavAndUnit(root);
+    root.querySelectorAll('[data-theme]').forEach(b => b.addEventListener('click', () => {
+      state.theme = b.dataset.theme;
+      save(); render(); toast(`${state.theme === 'dark' ? 'Dark' : 'Light'} mode on`);
+    }));
+    const ns = root.querySelector('#notifSwitch');
+    if (ns) ns.addEventListener('click', () => { state.notifications = !state.notifications; save(); render(); });
+    const sp = root.querySelector('#saveProfile');
+    if (sp) sp.addEventListener('click', () => { state.name = root.querySelector('#nameInput').value.trim() || 'Alex'; save(); toast('Profile saved'); });
+    root.querySelectorAll('[data-remove-unit]').forEach(b => b.addEventListener('click', () => { state.units.splice(+b.dataset.removeUnit, 1); save(); render(); }));
+    const uf = root.querySelector('#unitForm');
+    if (uf) uf.addEventListener('submit', e => {
+      e.preventDefault(); const fd = new FormData(uf); const code = String(fd.get('code') || '').trim().toUpperCase(); const name = String(fd.get('name') || '').trim();
+      if (!code || !name) return; if (state.units.some(u => u.code === code)) { toast('That unit already exists'); return; }
+      state.units.push({ code, name, outlineConfirmed: false }); save(); toast('Unit added'); render();
+    });
+    const exp = root.querySelector('#exportData');
+    if (exp) exp.addEventListener('click', () => { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'REACH-Student-Planner-backup.json'; a.click(); URL.revokeObjectURL(a.href); });
+    const imp = root.querySelector('#importData');
+    if (imp) imp.addEventListener('change', async () => { try { state = JSON.parse(await imp.files[0].text()); save(); toast('Backup imported'); render(); } catch { toast('That backup file could not be read'); } });
+    const reset = root.querySelector('#resetData');
+    if (reset) reset.addEventListener('click', () => { if (confirm('Reset planner to demo data?')) { state = structuredClone(defaults); save(); render(); } });
+  }
+
+  function wireOutlineUpload(root) {
+    wireNavAndUnit(root);
+    const of = root.querySelector('#outlineForm');
+    if (!of) return;
+    of.addEventListener('submit', async e => {
+      e.preventDefault();
+      const fd = new FormData(of);
+      const existingCode = String(fd.get('unit') || '').trim();
+      const newCode = String(fd.get('newCode') || '').trim().toUpperCase();
+      const newName = String(fd.get('newName') || '').trim();
+      const file = fd.get('file');
+      const code = newCode || existingCode;
+      let existing = state.units.find(u => u.code === code);
+      const name = newName || existing?.name || '';
+      if (!code) { toast('Choose an existing unit or enter a new unit code'); return; }
+      if (newCode && !newName && !existing) { toast('Enter a name for the new unit'); return; }
+      if (!file || !file.name) { toast('Choose a unit outline PDF'); return; }
+      if (newCode && newName && !existing) { state.units.push({ code: newCode, name: newName, outlineConfirmed: false }); existing = state.units[state.units.length - 1]; }
+      const btn = root.querySelector('#outlineReadButton'); if (btn) { btn.disabled = true; btn.textContent = 'Reading outline…'; }
+      toast('Reading the outline on this device…');
+      try {
+        const parsed = await extractOutlinePdf(file);
+        state.outlineDraft = { code, name: name || existing?.name || code, fileName: file.name, period: existing?.teachingPeriod || '', assessments: parsed.assessments, extractedTextChars: parsed.text.length };
+        selectedUnitCode = code; save(); nav('outline-review');
+      } catch (err) {
+        toast(err?.message || 'Could not read that outline');
+        if (btn) { btn.disabled = false; btn.textContent = 'Read outline & review →'; }
+      }
+    });
+  }
+
+  function wireOutlineReview(root) {
+    wireNavAndUnit(root);
+    const wireRemove = () => root.querySelectorAll('[data-remove-extracted]').forEach(b => {
+      if (b.dataset.wired) return; b.dataset.wired = '1';
+      b.addEventListener('click', () => b.closest('[data-assessment-row]')?.remove());
+    });
+    wireRemove();
+    const add = root.querySelector('#addAssessmentRow');
+    if (add) add.addEventListener('click', () => {
+      const host = root.querySelector('#assessmentRows');
+      host?.insertAdjacentHTML('beforeend', assessmentEditorRow({ title: '', type: 'Assessment', weight: '', dueDate: '', dueTime: '17:00' }, host.querySelectorAll('[data-assessment-row]').length));
+      wireRemove();
+    });
+    const co = root.querySelector('#confirmOutline');
+    if (!co) return;
+    co.addEventListener('click', () => {
+      const code = (root.querySelector('#outlineCode')?.value || '').trim().toUpperCase();
+      const name = (root.querySelector('#outlineName')?.value || '').trim();
+      const period = (root.querySelector('#outlinePeriod')?.value || '').trim();
+      if (!code || !name) { toast('Unit code and name are required'); return; }
+      const extracted = [...root.querySelectorAll('[data-assessment-row]')].map(row => ({
+        title: (row.querySelector('[data-a="title"]')?.value || '').trim(),
+        type: row.querySelector('[data-a="type"]')?.value || 'Assessment',
+        weight: +(row.querySelector('[data-a="weight"]')?.value || 0),
+        date: row.querySelector('[data-a="date"]')?.value || '',
+        time: row.querySelector('[data-a="time"]')?.value || '17:00'
+      })).filter(x => x.title);
+      let unit = state.units.find(u => u.code === code);
+      if (!unit) { unit = { code, name }; state.units.push(unit); }
+      unit.name = name; unit.outlineConfirmed = true; unit.outlineFile = state.outlineDraft?.fileName || unit.outlineFile || '';
+      unit.teachingPeriod = period; unit.outlineConfirmedAt = new Date().toISOString(); unit.extractedAssessmentCount = extracted.length;
+      for (const x of extracted) {
+        if (!x.date) continue;
+        const due = `${x.date}T${x.time || '17:00'}`;
+        const duplicate = state.assignments.some(a => a.unit === code && a.title.toLowerCase() === x.title.toLowerCase() && a.due.slice(0, 10) === x.date);
+        if (!duplicate) state.assignments.push({ id: Date.now() + Math.floor(Math.random() * 10000), unit: code, title: x.title, due, weight: Math.max(0, Math.min(100, x.weight || 0)), type: x.type, brief: 'Imported from reviewed unit outline.', source: 'unit-outline', steps: stepsForType(x.type) });
+      }
+      state.assignments.sort((a, b) => new Date(a.due) - new Date(b.due));
+      selectedUnitCode = code; state.outlineConfirmed = true; state.outlineDraft = null; save();
+      const dated = extracted.filter(x => x.date).length;
+      toast(`${code} saved · ${dated} dated assessment${dated === 1 ? '' : 's'} added`);
+      nav('unit-detail');
+    });
+  }
+
+  wire = function (root) {
+    if (screen === 'outline-upload') return wireOutlineUpload(root);
+    if (screen === 'outline-review') return wireOutlineReview(root);
+    if (screen === 'unit-detail') return wireNavAndUnit(root);
+    if (screen === 'settings') return wireCustomSettings(root);
+    oldWire(root);
+    root.querySelectorAll('[data-open-unit]').forEach(b => b.addEventListener('click', () => { selectedUnitCode = b.dataset.openUnit; nav('unit-detail'); }));
+    root.querySelectorAll('[data-upload-outline]').forEach(b => b.addEventListener('click', () => { selectedUnitCode = b.dataset.uploadOutline; nav('outline-upload'); }));
+  };
+
+  render();
+})();
