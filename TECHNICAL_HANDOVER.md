@@ -2,7 +2,7 @@
 
 ## Production deployment
 - Host: Render Static Site
-- URL: https://reach-student-planner-release.onrender.com
+- URL: https://reach-student-planner-final-v4.onrender.com
 - Source repository: https://github.com/Fahad-0505/REACH-student-planner
 - Branch: main
 - Deployment model: static HTML/CSS/JavaScript
