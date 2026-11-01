@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#234f2c" />
+  <meta name="description" content="REACH Student Planning System" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>REACH Student Planner</title>
+</head>
+<body>
+<div id="app" class="app-shell">
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="app-header">
+    <button class="brand" data-nav="home" aria-label="Go home"><img src="assets/favicon.svg" alt=""/><span>REACH</span></button>
+    <div class="header-actions"><span class="sync-pill" id="syncPill">Saved on this device</span><button class="avatar" data-nav="settings" aria-label="Open settings">AM</button></div>
+  </header>
+  <main id="screen" class="screen" tabindex="-1"></main>
+  <nav class="bottom-nav" aria-label="Primary navigation">
+    <button data-nav="home"><span>⌂</span><small>Home</small></button>
+    <button data-nav="today"><span>☼</span><small>Today</small></button>
+    <button data-nav="assignments"><span>▤</span><small>Assignments</small></button>
+    <button data-nav="planner"><span>▦</span><small>Planner</small></button>
+    <button data-nav="progress"><span>♧</span><small>Progress</small></button>
+  </nav>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
