@@ -29,7 +29,7 @@
     .feedback-score{display:flex;align-items:center;gap:12px;margin:12px 0}
     .score-badge{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:var(--mint);font-weight:900;font-size:18px}
     .plan-editor{display:grid;gap:10px;margin-top:14px}
-    .plan-row{display:grid;grid-template-columns:1fr 96px auto;gap:8px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--mint)}
+    .plan-row{display:grid;grid-template-columns:minmax(0,1fr) 82px 132px auto;gap:8px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--mint)}
     .reward-list{display:grid;gap:10px;margin-top:12px}
     .reward-card{padding:16px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(135deg,var(--yellow),var(--lav))}
     .reward-card.unlocked{box-shadow:0 0 0 2px rgba(83,174,100,.18)}
@@ -41,7 +41,8 @@
     html.dark .reward-card{background:linear-gradient(135deg,#40371d,#302944)!important}
     @media(max-width:420px){
       .brief-insight-grid{grid-template-columns:1fr}
-      .plan-row{grid-template-columns:1fr 86px}
+      .plan-row{grid-template-columns:1fr 82px}
+      .plan-row .plan-date-field{grid-column:1/-1}
       .plan-row .remove-plan-step{grid-column:1/-1}
     }
     @media(prefers-reduced-motion:reduce){
@@ -67,6 +68,25 @@
   }
   function escapeRegExp(s='') {
     return String(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  }
+  function briefFingerprint(text='') {
+    const s=normaliseText(text);let h=2166136261;
+    for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
+    return (h>>>0).toString(16).padStart(8,'0');
+  }
+  function isoDate(d){return d instanceof Date&&!Number.isNaN(d.valueOf())?d.toISOString().slice(0,10):''}
+  function distributePlanDates(steps=[],draft={}){
+    const due=draft.date?new Date(`${draft.date}T12:00:00`):null;
+    if(!due||Number.isNaN(due.valueOf()))return steps.map(s=>[s[0],s[1],!!s[2],s[3]||'']);
+    const now=new Date();now.setHours(12,0,0,0);
+    const last=new Date(due);last.setDate(last.getDate()-1);
+    const start=last<now?new Date(due):now;
+    const span=Math.max(0,Math.round((last-start)/86400000));
+    const maxIndex=Math.max(1,steps.length-1);
+    return steps.map((s,i)=>{
+      const d=new Date(start);d.setDate(start.getDate()+Math.round(span*(i/maxIndex)));
+      return [s[0],s[1],!!s[2],s[3]||isoDate(d)];
+    });
   }
   function sentenceChunks(text='') {
     return normaliseText(text).split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(s=>s.length > 8);
@@ -166,7 +186,16 @@
     if (analysis.referencing) checks.push({label:`Use ${analysis.referencing} referencing`,ok:hasAny(u,[analysis.referencing.toLowerCase().replace(/\s+/g,' '),'referencing','references','cite','citation'])});
     if (analysis.sourceRequirement) checks.push({label:'Use the required academic/peer-reviewed sources',ok:/peer[- ]review|academic source|scholarly|research|sources|literature|references/i.test(u)});
     if (analysis.sections?.length) checks.push({label:`Follow the required structure (${analysis.sections.slice(0,3).join(', ')})`,ok:analysis.sections.some(x=>u.toLowerCase().includes(x))||/\bstructure\b|\bsections?\b/i.test(u)});
-    const keywordHits = (analysis.keywords||[]).filter(k=>u.toLowerCase().includes(k.toLowerCase()));
+    const uLower=u.toLowerCase();
+    for(const instruction of (analysis.keyInstructions||[]).slice(0,4)){
+      const instructionTokens=[...new Set(tokens(instruction))].slice(0,10);
+      const hits=instructionTokens.filter(k=>uLower.includes(k));
+      const instructionActions=detectActions(instruction);
+      const actionHit=instructionActions.some(a=>hasAny(u,ACTION_GROUPS[a]||[a]));
+      const needed=Math.min(2,Math.max(1,instructionTokens.length));
+      checks.push({label:`Address: ${instruction.slice(0,105)}${instruction.length>105?'…':''}`,ok:hits.length>=needed||(actionHit&&hits.length>=1)});
+    }
+    const keywordHits = (analysis.keywords||[]).filter(k=>uLower.includes(k.toLowerCase()));
     const keyScore = analysis.keywords?.length ? Math.min(1,keywordHits.length/Math.min(6,analysis.keywords.length)) : 0.5;
     const base = checks.length ? checks.filter(c=>c.ok).length/checks.length : 0.5;
     let score = Math.round((base*0.8+keyScore*0.2)*100);
@@ -246,7 +275,8 @@
       ['Length',a.wordCount||'Not detected'],
       ['Referencing',a.referencing||'Not detected'],
       ['Sources',a.sourceRequirement||'Not detected'],
-      ['Structure',(a.sections||[]).slice(0,5).join(', ')||'Not detected']
+      ['Structure',(a.sections||[]).slice(0,5).join(', ')||'Not detected'],
+      ['Key topics',(a.keywords||[]).slice(0,6).join(', ')||'Not detected']
     ];
     return `<div class="brief-insight-grid">${insights.map(([k,v])=>`<div class="brief-insight"><strong>${esc(k)}</strong><span class="sub">${esc(v)}</span></div>`).join('')}</div>`;
   }
@@ -255,6 +285,7 @@
     return `<div class="plan-row" data-plan-row>
       <div class="field"><label>Task</label><input class="input" data-plan-title value="${esc(step?.[0]||'')}"></div>
       <div class="field"><label>Minutes</label><input class="input" type="number" min="5" max="300" step="5" data-plan-mins value="${Number(step?.[1]||30)}"></div>
+      <div class="field plan-date-field"><label>Target date</label><input class="input" type="date" data-plan-date value="${esc(step?.[3]||'')}"></div>
       <button class="btn btn-outline remove-plan-step" type="button" aria-label="Remove task">Remove</button>
     </div>`;
   }
@@ -303,6 +334,7 @@
     return `<div class="wizard"><div class="eyebrow">Add assignment · 3 / 4</div><h1>What is the brief asking?</h1>
       <div class="sub">First check what the planner identified, then explain it in your own words.</div>
       <div class="card" style="margin-top:16px"><h2>Brief insights</h2>${briefAnalysisHtml(a)}
+        ${(d.briefFileName||d.briefTextChars)?`<div class="notice" style="margin-top:12px"><strong>Document read:</strong> ${esc(d.briefFileName||'Pasted instructions')} · ${Number(d.briefTextChars||d.briefText?.length||0).toLocaleString('en-AU')} characters · Brief ID ${esc(d.briefFingerprint||'—')}</div>`:''}
         ${(a.keyInstructions||[]).length?`<div class="callout" style="margin-top:12px"><strong>Key instructions detected</strong><div class="feedback-list">${a.keyInstructions.slice(0,4).map(x=>`<div class="feedback-item">${esc(x.slice(0,220))}</div>`).join('')}</div></div>`:''}
       </div>
       <div class="card" style="margin-top:16px"><form id="smartUnderstanding"><div class="field"><label>In your own words, what do you think you need to do?</label><textarea class="textarea" name="understanding" required placeholder="For example: I need to compare..., use evidence..., and submit...">${esc(d.understanding||'')}</textarea></div>
@@ -329,10 +361,10 @@
     const steps=pd.steps?.length?pd.steps:generatePlanSteps(pd);
     const editing=!!pd.editingId;
     return `<div class="wizard"><div class="eyebrow">${editing?'Edit assignment plan':'Add assignment · 4 / 4'}</div><h1>Make the plan fit your life.</h1>
-      <div class="sub">Change the tasks, remove anything unhelpful, add your own steps, and set realistic time estimates.</div>
+      <div class="sub">Change the tasks, remove anything unhelpful, add your own steps, set realistic time estimates, and choose target dates that fit your week.</div>
       <div class="card" style="margin-top:16px"><div id="planRows" class="plan-editor">${steps.map(planRow).join('')}</div>
         <button class="btn btn-soft" style="width:100%;margin-top:12px" id="addPlanStep">＋ Add my own task</button>
-        <div class="notice" style="margin-top:12px">Time estimates are suggestions. Adjust them to match your energy, available study blocks and support needs.</div>
+        <div class="notice" style="margin-top:12px">Time estimates and target dates are suggestions. Move them around to match your energy, classes, work, appointments and available study blocks.</div>
         <div class="toolbar" style="margin-top:14px"><button class="btn btn-outline" data-nav="${editing?'plan-view':'understanding-check'}">← Back</button><button class="btn btn-primary" id="saveCustomPlan">${editing?'Save changes':'Save assignment plan'}</button></div>
       </div></div>`;
   };
@@ -392,6 +424,8 @@
           briefText:combined,
           briefFileName:file?.name||state.draft?.briefFileName||'',
           fileName:file?.name||state.draft?.fileName||'',
+          briefTextChars:combined.length,
+          briefFingerprint:briefFingerprint(combined),
           briefAnalysis:analysis
         });
         save(); nav('add-understanding');
@@ -421,7 +455,7 @@
     const b=root.querySelector('#prepareCustomPlan');
     if(b)b.addEventListener('click',()=>{
       const d=state.draft||{};
-      state.planDraft=Object.assign({},d,{steps:generatePlanSteps(d)});
+      state.planDraft=Object.assign({},d,{steps:distributePlanDates(generatePlanSteps(d),d)});
       save();nav('plan-customize');
     });
   }
@@ -435,19 +469,19 @@
     const saveBtn=root.querySelector('#saveCustomPlan');
     if(saveBtn)saveBtn.addEventListener('click',()=>{
       const rows=[...root.querySelectorAll('[data-plan-row]')];
-      const steps=rows.map(r=>[(r.querySelector('[data-plan-title]')?.value||'').trim(),Math.max(5,Math.min(300,+(r.querySelector('[data-plan-mins]')?.value||30))),false]).filter(s=>s[0]);
+      const steps=rows.map(r=>[(r.querySelector('[data-plan-title]')?.value||'').trim(),Math.max(5,Math.min(300,+(r.querySelector('[data-plan-mins]')?.value||30))),false,(r.querySelector('[data-plan-date]')?.value||'')]).filter(s=>s[0]);
       if(!steps.length){toast('Add at least one task to your plan');return}
       const pd=state.planDraft||{};
       if(pd.editingId){
         const a=state.assignments.find(x=>x.id===pd.editingId);
-        if(a){const oldDone=new Map((a.steps||[]).map(s=>[s[0],!!s[2]]));a.steps=steps.map(s=>[s[0],s[1],oldDone.get(s[0])||false]);selectedAssignmentId=a.id}
+        if(a){const oldDone=new Map((a.steps||[]).map(s=>[s[0],!!s[2]]));a.steps=steps.map(s=>[s[0],s[1],oldDone.get(s[0])||false,s[3]||'']);selectedAssignmentId=a.id}
       }else{
         const d=state.draft||pd;
         if(!d.title){toast('Assignment details are missing');return}
         const id=Date.now();
         state.assignments.unshift({
           id,unit:d.unit,title:d.title,due:`${d.date}T${d.time||'17:00'}`,weight:d.weight,type:d.type,
-          brief:d.brief||'',briefText:d.briefText||'',briefFileName:d.briefFileName||d.fileName||'',
+          brief:d.brief||'',briefText:d.briefText||'',briefFileName:d.briefFileName||d.fileName||'',briefTextChars:d.briefTextChars||d.briefText?.length||0,briefFingerprint:d.briefFingerprint||briefFingerprint(d.briefText||d.brief||''),
           briefAnalysis:d.briefAnalysis||null,understanding:d.understanding||'',understandingEvaluation:d.understandingEvaluation||null,
           steps:steps
         });
@@ -484,7 +518,7 @@
     const edit=root.querySelector('#editAssignmentPlan');
     if(edit)edit.addEventListener('click',()=>{
       const a=selectedAssignment();if(!a)return;
-      state.planDraft={editingId:a.id,title:a.title,unit:a.unit,type:a.type,weight:a.weight,date:(a.due||'').slice(0,10),time:(a.due||'').slice(11,16),brief:a.brief,briefText:a.briefText,briefAnalysis:a.briefAnalysis,steps:(a.steps||[]).map(s=>[s[0],s[1],s[2]])};
+      state.planDraft={editingId:a.id,title:a.title,unit:a.unit,type:a.type,weight:a.weight,date:(a.due||'').slice(0,10),time:(a.due||'').slice(11,16),brief:a.brief,briefText:a.briefText,briefAnalysis:a.briefAnalysis,steps:(a.steps||[]).map(s=>[s[0],s[1],s[2],s[3]||''])};
       save();nav('plan-customize');
     });
   }
