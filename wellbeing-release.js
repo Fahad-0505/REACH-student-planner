@@ -15,6 +15,7 @@
   let cloudSyncTimer = null;
   let cloudApplying = false;
   let authInitialised = false;
+  let authRecoveryMode = false;
 
   const style = document.createElement('style');
   style.textContent = `
@@ -395,9 +396,10 @@
   const priorSettingsView=views.settings;
   views.settings=function(){
     const base=priorSettingsView();
-    const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><button class="btn btn-outline" id="signOutAccount">Sign out & clear this device</button></div></div>`:
-      `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="8" placeholder="Password (8+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
-    return base+account+`<div class="card" style="margin-top:16px"><h2>Wellbeing & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service. Students stay in control of plans and can edit or reschedule tasks without penalty.</div></div>`;
+    const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><div class="toolbar"><button class="btn btn-outline" id="signOutAccount">Sign out</button><button class="btn btn-outline" id="signOutAndClear">Sign out & clear this device</button></div><button class="btn btn-outline" id="deleteCloudPlanner">Delete my synced planner data</button></div></div>`:
+      `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="8" placeholder="Password (8+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
+    const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="8" placeholder="New password (8+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
+    return base+account+recovery+`<div class="card" style="margin-top:16px"><h2>Wellbeing & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service. Students stay in control of plans and can edit or reschedule tasks without penalty.</div></div>`;
   };
 
   function wireNav(root){
@@ -547,7 +549,10 @@
       sb.auth.onAuthStateChange(async(event,session)=>{
         const previousId=authUser?.id||null;
         authUser=session?.user||null;
-        if(authUser&&authUser.id!==previousId)await loadCloudState();
+        if(event==='PASSWORD_RECOVERY'){
+          authRecoveryMode=true;screen='settings';render();
+        }
+        if(authUser&&authUser.id!==previousId&&event!=='PASSWORD_RECOVERY')await loadCloudState();
         const pill=document.getElementById('syncPill');if(pill)pill.textContent=authUser?'Synced account':'Saved on this device';
         if(screen==='settings')render();
       });
@@ -581,7 +586,8 @@
       const {error}=await sb.from('planner_state').upsert({user_id:authUser.id,data:payload,updated_at:new Date().toISOString()},{onConflict:'user_id'});
       if(error)throw error;
       const pill=document.getElementById('syncPill');if(pill)pill.textContent='Synced';
-    }catch(err){console.warn('Cloud sync failed',err);const pill=document.getElementById('syncPill');if(pill)pill.textContent='Saved locally · sync pending'}
+      return true;
+    }catch(err){console.warn('Cloud sync failed',err);const pill=document.getElementById('syncPill');if(pill)pill.textContent='Saved locally · sync pending';return false}
   }
   save=function(){
     ensureStateShape();state.lastSavedAt=new Date().toISOString();previousSave();
@@ -605,9 +611,34 @@
       const {data,error}=await sb.auth.signUp({email,password,options:{data:{first_name:state.name||''}}});
       if(error)toast(error.message);else if(data.session)toast('Account created and signed in');else toast('Account created — check your email to confirm it');
     });
-    const sync=root.querySelector('#syncNow');if(sync)sync.addEventListener('click',async()=>{await syncCloudNow();toast('Planner synced')});
+    const forgot=root.querySelector('#forgotPassword');if(forgot)forgot.addEventListener('click',async()=>{
+      if(!sb){toast('Account service is still loading');return}
+      const email=String(new FormData(root.querySelector('#authForm')).get('email')||'').trim();
+      if(!email){toast('Enter your email first');return}
+      const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
+      if(error)toast(error.message);else toast('Password reset email sent');
+    });
+    const recovery=root.querySelector('#passwordRecoveryForm');if(recovery)recovery.addEventListener('submit',async e=>{
+      e.preventDefault();if(!sb)return;
+      const password=String(new FormData(recovery).get('password')||'');
+      if(password.length<8){toast('Use at least 8 characters');return}
+      const {error}=await sb.auth.updateUser({password});
+      if(error)toast(error.message);else{authRecoveryMode=false;toast('Password updated');render()}
+    });
+    const sync=root.querySelector('#syncNow');if(sync)sync.addEventListener('click',async()=>{const ok=await syncCloudNow();toast(ok?'Planner synced':'Saved locally — cloud sync still pending')});
     const out=root.querySelector('#signOutAccount');if(out)out.addEventListener('click',async()=>{
+      if(sb)await sb.auth.signOut();authUser=null;render();toast('Signed out — local planner kept on this device');
+    });
+    const clearOut=root.querySelector('#signOutAndClear');if(clearOut)clearOut.addEventListener('click',async()=>{
+      if(!confirm('Sign out and remove the planner copy stored on this device? Your synced account data will stay in the cloud.'))return;
       if(sb)await sb.auth.signOut();authUser=null;state=structuredClone(defaults);ensureStateShape();localStorage.setItem(KEY,JSON.stringify(state));applyTheme();render();toast('Signed out and cleared this device');
+    });
+    const del=root.querySelector('#deleteCloudPlanner');if(del)del.addEventListener('click',async()=>{
+      if(!sb||!authUser)return;
+      if(!confirm('Delete the planner data synced to this account? This cannot be undone. Your login account will remain.'))return;
+      const {error}=await sb.from('planner_state').delete().eq('user_id',authUser.id);
+      if(error){toast(error.message);return}
+      state=structuredClone(defaults);ensureStateShape();localStorage.setItem(KEY,JSON.stringify(state));applyTheme();toast('Synced planner data deleted');render();
     });
   }
 
