@@ -83,7 +83,7 @@
   views.settings = function () {
     return `<div class="eyebrow">Profile & settings</div><h1>Make the planner yours.</h1>
       <div class="grid g2">
-        <div class="card"><h2>Profile</h2><div class="field"><label>First name</label><input class="input" id="nameInput" value="${esc(state.name)}"></div><button class="btn btn-primary" id="saveProfile">Save profile</button></div>
+        <div class="card"><h2>Profile</h2><div class="field"><label>First name</label><input class="input" id="nameInput" value="${esc(state.name)}"></div><div class="field"><label>Semester</label><input class="input" id="semesterInput" value="${esc(state.semester||'')}" placeholder="e.g. Semester 1, 2027"></div><button class="btn btn-primary" id="saveProfile">Save profile</button></div>
         <div class="card"><h2>Preferences</h2><div class="settings-list">
           <div class="setting"><div><strong>Appearance</strong><div class="sub">Use the mode that feels easiest on your eyes.</div></div><div class="theme-choice"><button class="chip ${state.theme === 'light' ? 'active' : ''}" data-theme="light">☀ Light</button><button class="chip ${state.theme === 'dark' ? 'active' : ''}" data-theme="dark">☾ Dark</button></div></div>
           <div class="divider"></div><div class="setting"><div><strong>Gentle due-date reminders</strong><div class="sub">Optional browser reminders while the app/PWA is open. Permission required.</div></div><button class="switch ${state.notifications ? 'on' : ''}" id="notifSwitch" aria-label="Toggle reminders"></button></div>
@@ -116,7 +116,7 @@
     const ns = root.querySelector('#notifSwitch');
     if (ns) ns.addEventListener('click', () => { state.notifications = !state.notifications; save(); render(); });
     const sp = root.querySelector('#saveProfile');
-    if (sp) sp.addEventListener('click', () => { state.name = root.querySelector('#nameInput').value.trim() || 'Student'; save(); toast('Profile saved'); });
+    if (sp) sp.addEventListener('click', () => { state.name = root.querySelector('#nameInput').value.trim() || 'Student'; state.semester=(root.querySelector('#semesterInput')?.value||'').trim(); save(); toast('Profile saved'); });
     root.querySelectorAll('[data-remove-unit]').forEach(b => b.addEventListener('click', () => { state.units.splice(+b.dataset.removeUnit, 1); save(); render(); }));
     const uf = root.querySelector('#unitForm');
     if (uf) uf.addEventListener('submit', e => {
