@@ -22,3 +22,13 @@
 - Confirmed dated assessments feed the Planner's upcoming unit deadlines.
 - Unit outline files are processed locally in the browser and are not sent to a third-party AI service.
 - Scanned/image-only PDFs require manual review/entry because OCR is intentionally not bundled into the release.
+
+## Wellbeing + account production release
+- Added user-defined reward thresholds and claimable self-rewards.
+- Added PDF/DOCX/TXT assignment-brief reading with file-specific document proof (file name, extracted character count and brief fingerprint).
+- Strengthened understanding checks so feedback compares the student's explanation with brief-specific instructions rather than returning a generic positive response.
+- Added editable assignment plans with custom task names, minutes and target dates.
+- Added optional Supabase email/password accounts with cross-device planner sync.
+- Added password recovery, accurate sync-status messaging, safer sign-out options and explicit synced-planner deletion.
+- Kept original uploaded assignment files local to the browser; only extracted text and planner data are eligible for cloud sync.
+- Updated the PWA cache so existing installs receive the new release.
