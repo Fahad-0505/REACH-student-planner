@@ -32,3 +32,14 @@
 - Added password recovery, accurate sync-status messaging, safer sign-out options and explicit synced-planner deletion.
 - Kept original uploaded assignment files local to the browser; only extracted text and planner data are eligible for cloud sync.
 - Updated the PWA cache so existing installs receive the new release.
+
+### Final wellbeing audit fixes
+- Fresh users now start with clean data: 0 points, no demo units/assignments/commitments, and no pre-selected reward.
+- Replaced fake planner capacity and placeholder study events with real remaining task minutes, real commitments and user-set target dates.
+- Energy check-ins now adjust the suggested focus block.
+- Focus timer now supports reliable pause/resume/reset and a real focus → recharge cycle; completed focus sessions are recorded.
+- Gentle due-date browser reminders are opt-in and only run while the app/PWA is open.
+- Active/Completed assignment filters now work, and assignments can be deleted without removing already-earned growth points.
+- Restored semester to the saved/synced profile and personalised header initials.
+- Removed unconditional positive fallback feedback and remaining demo-only UI copy.
+- Escaped additional student-entered fields to reduce unsafe HTML rendering.
