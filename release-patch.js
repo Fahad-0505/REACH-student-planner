@@ -86,22 +86,22 @@
         <div class="card"><h2>Profile</h2><div class="field"><label>First name</label><input class="input" id="nameInput" value="${esc(state.name)}"></div><button class="btn btn-primary" id="saveProfile">Save profile</button></div>
         <div class="card"><h2>Preferences</h2><div class="settings-list">
           <div class="setting"><div><strong>Appearance</strong><div class="sub">Use the mode that feels easiest on your eyes.</div></div><div class="theme-choice"><button class="chip ${state.theme === 'light' ? 'active' : ''}" data-theme="light">☀ Light</button><button class="chip ${state.theme === 'dark' ? 'active' : ''}" data-theme="dark">☾ Dark</button></div></div>
-          <div class="divider"></div><div class="setting"><div><strong>Gentle reminders</strong><div class="sub">Supportive, not nagging.</div></div><button class="switch ${state.notifications ? 'on' : ''}" id="notifSwitch" aria-label="Toggle reminders"></button></div>
-          <div class="divider"></div><div class="setting"><div><strong>Data storage</strong><div class="sub">Working planner data stays on this device.</div></div><span class="status">Local-first</span></div>
+          <div class="divider"></div><div class="setting"><div><strong>Gentle due-date reminders</strong><div class="sub">Optional browser reminders while the app/PWA is open. Permission required.</div></div><button class="switch ${state.notifications ? 'on' : ''}" id="notifSwitch" aria-label="Toggle reminders"></button></div>
+          <div class="divider"></div><div class="setting"><div><strong>Data storage</strong><div class="sub">Saved locally first. Signed-in users can also sync securely to their account.</div></div><span class="status">Local + optional sync</span></div>
         </div></div>
       </div>
       <div class="card" style="margin-top:16px"><div class="page-head" style="margin-bottom:8px"><div><h2>Units</h2><div class="sub">Tap a unit to open assessments and deadlines.</div></div><button class="btn btn-soft" data-nav="outline-upload">＋ Add / upload</button></div>
         ${state.units.length ? state.units.map((u, i) => `<div class="row unit-row"><button class="unit-open" data-open-unit="${esc(u.code)}"><div class="row-main"><strong>${esc(u.code)} · ${esc(u.name)}</strong><div class="unit-meta">${u.outlineConfirmed ? `<span class="status">Outline confirmed</span>` : `<span class="status yellow">Outline not added</span>`}<span class="status blue">${state.assignments.filter(a => a.unit === u.code).length} assessments</span></div>${u.teachingPeriod ? `<small>${esc(u.teachingPeriod)}</small>` : ''}</div><span class="chevron">›</span></button><button class="btn btn-outline" data-remove-unit="${i}">Remove</button></div>`).join('') : `<div class="empty">No units yet.</div>`}
         <form id="unitForm" class="grid g3" style="margin-top:14px"><input class="input" name="code" placeholder="Unit code" required><input class="input" name="name" placeholder="Unit name" required><button class="btn btn-primary">Add unit</button></form>
       </div>
-      <div class="card" style="margin-top:16px"><h2>Data & handover</h2><div class="sub">Export a backup before changing devices. The file contains planner data only.</div><div class="toolbar" style="margin-top:12px"><button class="btn btn-soft" id="exportData">Export backup</button><label class="btn btn-outline">Import backup<input id="importData" type="file" accept="application/json" hidden></label><button class="btn btn-danger" id="resetData">Reset demo data</button></div></div>`;
+      <div class="card" style="margin-top:16px"><h2>Data & handover</h2><div class="sub">Export a backup before changing devices. The file contains planner data only.</div><div class="toolbar" style="margin-top:12px"><button class="btn btn-soft" id="exportData">Export backup</button><label class="btn btn-outline">Import backup<input id="importData" type="file" accept="application/json" hidden></label><button class="btn btn-danger" id="resetData">Reset local data</button></div></div>`;
   };
 
   views.planner = function () {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const upcoming = [...state.assignments].filter(a => new Date(a.due).getTime() > Date.now() - 86400000).sort((a, b) => new Date(a.due) - new Date(b.due)).slice(0, 4);
     return `<div class="page-head"><div><div class="eyebrow">Planner</div><h1>A plan that fits you.</h1><div class="sub">Build around your life, not the other way round.</div></div><button class="btn btn-soft" data-nav="availability">Edit availability</button></div>
-      <div class="card" style="background:linear-gradient(135deg,#20552f,#36783f);color:white"><div class="eyebrow" style="color:#c9f5d2">Room for real life</div><strong style="font-size:34px;display:block;margin:6px 0">6h 30m</strong><div>of 9h available · 2h 30m free</div></div>
+      <div class="card" style="background:linear-gradient(135deg,#20552f,#36783f);color:white"><div class="eyebrow" style="color:#c9f5d2">Planned study remaining</div><strong style="font-size:34px;display:block;margin:6px 0">${fmtMins(totalPlanned())}</strong><div>${state.commitments.length} recurring commitment${state.commitments.length===1?'':'s'} added</div></div>
       <div class="week" style="margin-top:16px">${days.map((d, idx) => `<div class="day ${idx === 2 ? 'today' : ''}"><strong>${d}</strong>${state.commitments.filter(c => c.day === d).map(c => `<div class="event ${c.kind}"><b>${c.time}</b><br>${esc(c.title)}</div>`).join('')}</div>`).join('')}</div>
       <div class="card" style="margin-top:16px"><h2>Upcoming unit deadlines</h2><div class="sub">Dates confirmed from unit outlines and assignments.</div>${upcoming.length ? `<div class="deadline-list" style="margin-top:12px">${upcoming.map(a => `<button class="deadline-item unit-open" data-open-assignment="${a.id}"><div class="status">${esc(a.unit)}</div><div class="row-main"><strong>${esc(a.title)}</strong><small>Due ${fmtDue(a.due)}</small></div><span class="chevron">›</span></button>`).join('')}</div>` : `<div class="empty">No upcoming deadlines yet.</div>`}</div>
       <div class="callout" style="margin-top:16px"><h3>Let's spread things out</h3><p>Short blocks, a little buffer, no cramming.</p><button class="btn btn-primary" data-nav="today">▹ Start a ${state.focusMinutes}-min focus</button></div>`;
@@ -116,7 +116,7 @@
     const ns = root.querySelector('#notifSwitch');
     if (ns) ns.addEventListener('click', () => { state.notifications = !state.notifications; save(); render(); });
     const sp = root.querySelector('#saveProfile');
-    if (sp) sp.addEventListener('click', () => { state.name = root.querySelector('#nameInput').value.trim() || 'Alex'; save(); toast('Profile saved'); });
+    if (sp) sp.addEventListener('click', () => { state.name = root.querySelector('#nameInput').value.trim() || 'Student'; save(); toast('Profile saved'); });
     root.querySelectorAll('[data-remove-unit]').forEach(b => b.addEventListener('click', () => { state.units.splice(+b.dataset.removeUnit, 1); save(); render(); }));
     const uf = root.querySelector('#unitForm');
     if (uf) uf.addEventListener('submit', e => {
@@ -129,7 +129,7 @@
     const imp = root.querySelector('#importData');
     if (imp) imp.addEventListener('change', async () => { try { state = JSON.parse(await imp.files[0].text()); save(); toast('Backup imported'); render(); } catch { toast('That backup file could not be read'); } });
     const reset = root.querySelector('#resetData');
-    if (reset) reset.addEventListener('click', () => { if (confirm('Reset planner to demo data?')) { state = structuredClone(defaults); save(); render(); } });
+    if (reset) reset.addEventListener('click', () => { if (confirm('Reset the planner data stored on this device?')) { state = structuredClone(defaults); save(); render(); } });
   }
 
   function wireOutlineUpload(root) {
