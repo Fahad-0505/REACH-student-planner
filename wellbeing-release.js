@@ -418,7 +418,7 @@
     const a=selectedAssignment();
     if(!a)return `<div class="empty"><h2>No assignment selected</h2><button class="btn btn-primary" data-nav="add-assignment">Add assignment</button></div>`;
     return `<div class="eyebrow">Assignment plan</div><h1>Small steps. Room to breathe.</h1>${assignmentCard(a,true)}
-      <div class="toolbar" style="margin-top:14px"><button class="btn btn-soft" id="editAssignmentPlan">Edit tasks & timing</button><button class="btn btn-outline" data-nav="planner">Open planner</button></div>
+      <div class="toolbar" style="margin-top:14px"><button class="btn btn-soft" id="editAssignmentPlan">Edit tasks & timing</button><button class="btn btn-outline" data-nav="planner">Open planner</button><button class="btn btn-outline" id="deleteAssignment">Delete assignment</button></div>
       ${a.briefAnalysis?`<div class="card" style="margin-top:16px"><h2>What the brief asks for</h2>${briefAnalysisHtml(a.briefAnalysis)}${a.briefFileName?`<div class="sub" style="margin-top:10px">Source: ${esc(a.briefFileName)}</div>`:''}</div>`:''}`;
   };
 
@@ -581,6 +581,12 @@
       const a=selectedAssignment();if(!a)return;
       state.planDraft={editingId:a.id,title:a.title,unit:a.unit,type:a.type,weight:a.weight,date:(a.due||'').slice(0,10),time:(a.due||'').slice(11,16),brief:a.brief,briefText:a.briefText,briefAnalysis:a.briefAnalysis,steps:(a.steps||[]).map(s=>[s[0],s[1],s[2],s[3]||''])};
       save();nav('plan-customize');
+    });
+    const del=root.querySelector('#deleteAssignment');
+    if(del)del.addEventListener('click',()=>{
+      const a=selectedAssignment();if(!a)return;
+      if(!confirm(`Delete “${a.title}” and its saved brief/plan? Growth points already earned will stay.`))return;
+      state.assignments=state.assignments.filter(x=>x.id!==a.id);selectedAssignmentId=state.assignments[0]?.id||null;save();toast('Assignment deleted');nav('assignments');
     });
   }
 
