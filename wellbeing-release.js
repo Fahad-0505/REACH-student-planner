@@ -75,7 +75,14 @@
     for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
     return (h>>>0).toString(16).padStart(8,'0');
   }
-  function isoDate(d){return d instanceof Date&&!Number.isNaN(d.valueOf())?d.toISOString().slice(0,10):''}
+  function isoDate(d){
+    if(!(d instanceof Date)||Number.isNaN(d.valueOf()))return '';
+    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function withArticle(label='assessment'){
+    const x=String(label||'assessment').toLowerCase();return `${/^[aeiou]/i.test(x)?'an':'a'} ${x}`;
+  }
   function distributePlanDates(steps=[],draft={}){
     const due=draft.date?new Date(`${draft.date}T12:00:00`):null;
     if(!due||Number.isNaN(due.valueOf()))return steps.map(s=>[s[0],s[1],!!s[2],s[3]||'']);
@@ -143,7 +150,7 @@
     const clean = normaliseText(text).slice(0, MAX_BRIEF_CHARS);
     const actions = detectActions(clean);
     const deliverable = detectDeliverable(clean, draft.type);
-    const wordCount = firstMatch(clean, /\b(?:approximately|about|maximum|max\.?|minimum|min\.?|up to)?\s*\d{3,5}\s*(?:-|–|to)?\s*\d{0,5}\s*words?\b/i);
+    const wordCount = firstMatch(clean, /\b(?:approximately|about|maximum|max\.?|minimum|min\.?|up to)?\s*(?:\d{1,3}(?:,\d{3})+|\d{3,5})(?:\s*(?:-|–|to)\s*(?:\d{1,3}(?:,\d{3})+|\d{3,5}))?\s*words?\b/i);
     const referencing = firstMatch(clean, /\b(?:APA\s*(?:7|7th)?(?:\s*edition)?|Harvard|Chicago|IEEE|Vancouver|AGLC\s*\d*)\b/i);
     const sourceRequirement = firstMatch(clean, /\b(?:(?:minimum|at least|use|include)\s+\d+\s+)?(?:peer[- ]reviewed|academic|scholarly)\s+(?:sources?|references?|articles?|literature)\b/i);
     const sections = ['executive summary','introduction','background','method','methodology','analysis','discussion','recommendations','reflection','conclusion','reference list','appendix']
@@ -151,7 +158,7 @@
     const keyInstructions = sentenceChunks(clean).filter(s=>/\b(must|required|should|need to|task is to|you are to|you will|submit|include|demonstrate|analyse|analyze|evaluate|compare|explain|discuss|reflect|justify|recommend|design)\b/i.test(s)).slice(0,6);
     const keywords = topKeywords(clean,14);
     const requirements = [];
-    requirements.push(`Produce a ${deliverable.toLowerCase()}`);
+    requirements.push(`Produce ${withArticle(deliverable)}`);
     if (actions.length) requirements.push(`Use the task actions: ${actions.join(', ')}`);
     if (wordCount) requirements.push(`Meet the stated length: ${wordCount}`);
     if (referencing) requirements.push(`Use ${referencing} referencing`);
@@ -178,7 +185,7 @@
       Quiz:['quiz'],
       Exam:['exam','test']
     };
-    checks.push({label:`Produce a ${String(analysis.deliverable||'assessment').toLowerCase()}`,ok:hasAny(u,deliverableWords[analysis.deliverable]||[String(analysis.deliverable||'assessment').toLowerCase()])});
+    checks.push({label:`Produce ${withArticle(analysis.deliverable||'assessment')}`,ok:hasAny(u,deliverableWords[analysis.deliverable]||[String(analysis.deliverable||'assessment').toLowerCase()])});
     for (const action of (analysis.actions||[]).slice(0,4)) checks.push({label:`${action[0].toUpperCase()+action.slice(1)} as the brief asks`,ok:hasAny(u,ACTION_GROUPS[action]||[action])});
     if (analysis.wordCount) {
       const nums = analysis.wordCount.match(/\d{3,5}/g)||[];
