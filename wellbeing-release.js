@@ -285,6 +285,46 @@
     return `<div class="brief-insight-grid">${insights.map(([k,v])=>`<div class="brief-insight"><strong>${esc(k)}</strong><span class="sub">${esc(v)}</span></div>`).join('')}</div>`;
   }
 
+  function weekStartMonday(base=new Date()) {
+    const d=new Date(base);d.setHours(12,0,0,0);const offset=(d.getDay()+6)%7;d.setDate(d.getDate()-offset);return d;
+  }
+  function scheduledTasks() {
+    const rows=[];
+    for(const a of state.assignments||[])for(const s of a.steps||[])rows.push({assignment:a,step:s,date:s?.[3]||'',done:!!s?.[2]});
+    return rows;
+  }
+  function reminderDueText(due) {
+    const diff=new Date(due)-new Date(), hours=Math.round(diff/3600000);
+    if(hours<0)return 'is overdue';
+    if(hours<24)return `is due in about ${Math.max(1,hours)} hour${hours===1?'':'s'}`;
+    const days=Math.ceil(hours/24);return `is due in ${days} day${days===1?'':'s'}`;
+  }
+  function maybeSendGentleReminder() {
+    try{
+      if(!state.notifications||!('Notification' in window)||Notification.permission!=='granted')return;
+      const now=Date.now();
+      const candidates=(state.assignments||[]).filter(a=>a?.due&&doneCount(a)<(a.steps?.length||0))
+        .map(a=>({a,ms:new Date(a.due).getTime()-now}))
+        .filter(x=>x.ms<=48*3600000&&x.ms>=-7*24*3600000)
+        .sort((x,y)=>x.ms-y.ms);
+      if(!candidates.length)return;
+      const {a}=candidates[0],day=isoDate(new Date()),key=`${a.id}:${day}`,storeKey='reach-gentle-reminders-v1';
+      const seen=JSON.parse(localStorage.getItem(storeKey)||'{}');
+      if(seen[key])return;
+      new Notification('REACH Student Planner',{body:`${a.title} ${reminderDueText(a.due)}. Choose one small step — you do not need to do everything at once.`,tag:`reach-${a.id}-${day}`});
+      seen[key]=Date.now();localStorage.setItem(storeKey,JSON.stringify(seen));
+    }catch(err){console.warn('Reminder unavailable',err)}
+  }
+  async function setGentleReminders(enabled) {
+    if(!enabled){state.notifications=false;save();toast('Gentle reminders off');return}
+    if(!('Notification' in window)){state.notifications=false;save();toast('Browser reminders are not supported on this device');return}
+    let permission=Notification.permission;
+    if(permission==='default')permission=await Notification.requestPermission();
+    state.notifications=permission==='granted';save();
+    toast(state.notifications?'Gentle reminders on while the app is open':'Reminder permission was not enabled');
+    if(state.notifications)maybeSendGentleReminder();
+  }
+
   function planRow(step, idx) {
     return `<div class="plan-row" data-plan-row>
       <div class="field"><label>Task</label><input class="input" data-plan-title value="${esc(step?.[0]||'')}"></div>
@@ -380,6 +420,21 @@
     return `<div class="eyebrow">Assignment plan</div><h1>Small steps. Room to breathe.</h1>${assignmentCard(a,true)}
       <div class="toolbar" style="margin-top:14px"><button class="btn btn-soft" id="editAssignmentPlan">Edit tasks & timing</button><button class="btn btn-outline" data-nav="planner">Open planner</button></div>
       ${a.briefAnalysis?`<div class="card" style="margin-top:16px"><h2>What the brief asks for</h2>${briefAnalysisHtml(a.briefAnalysis)}${a.briefFileName?`<div class="sub" style="margin-top:10px">Source: ${esc(a.briefFileName)}</div>`:''}</div>`:''}`;
+  };
+
+  views.planner=function(){
+    const labels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],start=weekStartMonday(),tasks=scheduledTasks();
+    const days=labels.map((label,i)=>{const date=new Date(start);date.setDate(start.getDate()+i);return {label,date,key:isoDate(date)}});
+    const weekKeys=new Set(days.map(d=>d.key));
+    const weekTasks=tasks.filter(t=>t.date&&weekKeys.has(t.date)&&!t.done);
+    const undated=tasks.filter(t=>!t.date&&!t.done);
+    return `<div class="page-head"><div><div class="eyebrow">Planner</div><h1>A plan that fits you.</h1><div class="sub">Your real commitments and assignment target dates, in one place.</div></div><button class="btn btn-soft" data-nav="availability">Edit commitments</button></div>
+      <div class="card" style="background:linear-gradient(135deg,#20552f,#36783f);color:white"><div class="eyebrow" style="color:#c9f5d2">Planned study remaining</div><strong style="font-size:34px;display:block;margin:6px 0">${fmtMins(totalPlanned())}</strong><div>${weekTasks.length} assignment task${weekTasks.length===1?'':'s'} scheduled this week · ${state.commitments.length} recurring commitment${state.commitments.length===1?'':'s'}</div></div>
+      <div class="week" style="margin-top:16px">${days.map(d=>`<div class="day ${d.key===isoDate(new Date())?'today':''}"><strong>${d.label}</strong><small>${d.date.toLocaleDateString('en-AU',{day:'numeric',month:'short'})}</small>
+        ${state.commitments.filter(x=>x.day===d.label).map(x=>`<div class="event ${esc(x.kind||'personal')}"><b>${esc(x.time||'')}</b><br>${esc(x.title||'')}</div>`).join('')}
+        ${tasks.filter(t=>t.date===d.key&&!t.done).map(t=>`<div class="event study"><b>${esc(t.assignment.unit||'Assignment')}</b><br>${esc(t.step[0])}<br><small>${Number(t.step[1]||0)} min</small></div>`).join('')}
+      </div>`).join('')}</div>
+      <div class="callout"><h3>Keep it adjustable</h3><p>${undated.length?`${undated.length} unfinished task${undated.length===1?' has':'s have'} no target date yet. Open the assignment and choose dates that fit your week.`:'Move target dates whenever your week changes. The plan is here to support you, not punish you.'}</p><button class="btn btn-primary" data-nav="assignments">Review assignment plans</button></div>`;
   };
 
   views.progress=function(){
@@ -600,6 +655,8 @@
 
   function wireSettings(root){
     previousWire(root);
+    const originalReminder=root.querySelector('#notifSwitch');
+    if(originalReminder){const reminder=originalReminder.cloneNode(true);originalReminder.replaceWith(reminder);reminder.addEventListener('click',async()=>{await setGentleReminders(!state.notifications);render()})}
     const form=root.querySelector('#authForm');
     if(form)form.addEventListener('submit',async e=>{
       e.preventDefault();if(!sb){toast('Account service is still loading');return}
@@ -659,4 +716,6 @@
 
   initCloud();
   render();
+  setTimeout(maybeSendGentleReminder,1800);
+  setInterval(maybeSendGentleReminder,20*60*1000);
 })();
