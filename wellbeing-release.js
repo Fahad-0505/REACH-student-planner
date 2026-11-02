@@ -53,11 +53,7 @@
   document.head.appendChild(style);
 
   function ensureStateShape() {
-    if (!Array.isArray(state.rewards)) {
-      state.rewards = [
-        { id: 'reward-cafe', title: 'Favourite café break', points: 200, claimed: false }
-      ];
-    }
+    if (!Array.isArray(state.rewards)) state.rewards = [];
     if (!state.accountPrefs) state.accountPrefs = { cloudSync: true };
     if (!state.lastSavedAt) state.lastSavedAt = new Date().toISOString();
     if (!Array.isArray(state.focusHistory)) state.focusHistory = [];
@@ -314,6 +310,7 @@
 
 
   views['add-assignment']=function(){
+    if(!state.units?.length)return `<div class="wizard"><div class="eyebrow">Add assignment</div><h1>Add your unit first.</h1><div class="sub">Assignments stay connected to a unit so deadlines, outlines and plans remain organised.</div><div class="card" style="margin-top:16px"><div class="notice">Add a unit manually or upload its unit outline, then come back to create the assignment.</div><button class="btn btn-primary" style="margin-top:14px;width:100%" data-nav="outline-upload">Add a unit / outline →</button></div></div>`;
     return `<div class="wizard"><div class="eyebrow">Add assignment · 1 / 4</div><h1>Start with the basics.</h1><div class="sub">One assignment. Four calm steps: details, brief, understanding and a plan you can edit.</div>
       <div class="steps"><div class="on"></div><div></div><div></div><div></div></div>
       <div class="card"><form id="assignmentDetails"><div class="field"><label>Unit</label><select class="select" name="unit">${state.units.map(u=>`<option value="${esc(u.code)}">${esc(u.code)} · ${esc(u.name)}</option>`).join('')}</select></div>
