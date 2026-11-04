@@ -1,1 +1,49 @@
-{"name":"REACH Student Planner","short_name":"REACH Planner","start_url":"./","display":"standalone","background_color":"#fafbf8","theme_color":"#234f2c","icons":[{"src":"assets/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "id": "./",
+  "name": "REACH Student Planner",
+  "short_name": "REACH Planner",
+  "description": "A calm, ADHD-friendly student planner for assignments, focus, progress and wellbeing.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "portrait-primary",
+  "background_color": "#fafbf8",
+  "theme_color": "#234f2c",
+  "lang": "en-AU",
+  "dir": "ltr",
+  "categories": [
+    "education",
+    "productivity",
+    "lifestyle"
+  ],
+  "icons": [
+    {
+      "src": "assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add assignment",
+      "short_name": "Add assignment",
+      "url": "./?open=add-assignment"
+    },
+    {
+      "name": "Focus",
+      "short_name": "Focus",
+      "url": "./?open=focus"
+    },
+    {
+      "name": "Planner",
+      "short_name": "Planner",
+      "url": "./?open=planner"
+    }
+  ]
+}
