@@ -16,6 +16,7 @@
   let cloudApplying = false;
   let authInitialised = false;
   let authRecoveryMode = false;
+  let realtimeChannel = null;
 
   const style = document.createElement('style');
   style.textContent = `
@@ -608,6 +609,30 @@
     });
   }
 
+
+  function subscribeRealtime(){
+    if(!sb||!authUser||!sb.channel)return;
+    try{
+      if(realtimeChannel)sb.removeChannel(realtimeChannel);
+      realtimeChannel=sb.channel('planner-state-'+authUser.id)
+        .on('postgres_changes',{event:'UPDATE',schema:'public',table:'planner_state',filter:'user_id=eq.'+authUser.id},payload=>{
+          const remote=payload?.new?.data;
+          if(!remote||remote.installId===state.installId)return;
+          const remoteTime=new Date(payload?.new?.updated_at||remote.lastSavedAt||0).getTime()||0;
+          const localTime=new Date(state.lastSavedAt||0).getTime()||0;
+          if(remoteTime<=localTime+1000)return;
+          cloudApplying=true;
+          state=Object.assign(structuredClone(defaults),remote);
+          state.units=Array.isArray(remote.units)?remote.units:structuredClone(defaults.units);
+          state.lastCloudSyncAt=payload?.new?.updated_at||remote.lastCloudSyncAt||new Date().toISOString();
+          ensureStateShape();
+          localStorage.setItem(KEY,JSON.stringify(state));
+          cloudApplying=false;applyTheme();render();toast('Planner updated from your other device');
+        })
+        .subscribe();
+    }catch(err){console.warn('Live account sync unavailable',err)}
+  }
+
   async function initCloud(){
     if(authInitialised||!window.supabase?.createClient)return;
     authInitialised=true;
@@ -615,14 +640,15 @@
       sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
       const {data:{session}}=await sb.auth.getSession();
       authUser=session?.user||null;
-      if(authUser)await loadCloudState();
+      if(authUser){await loadCloudState();subscribeRealtime()}
       sb.auth.onAuthStateChange(async(event,session)=>{
         const previousId=authUser?.id||null;
         authUser=session?.user||null;
         if(event==='PASSWORD_RECOVERY'){
           authRecoveryMode=true;screen='settings';render();
         }
-        if(authUser&&authUser.id!==previousId&&event!=='PASSWORD_RECOVERY')await loadCloudState();
+        if(authUser&&authUser.id!==previousId&&event!=='PASSWORD_RECOVERY'){await loadCloudState();subscribeRealtime()}
+        if(!authUser&&realtimeChannel){try{await sb.removeChannel(realtimeChannel)}catch{} realtimeChannel=null;}
         const pill=document.getElementById('syncPill');if(pill)pill.textContent=authUser?'Synced account':'Saved on this device';
         if(screen==='settings')render();
       });
