@@ -63,6 +63,10 @@
       catch { state.installId = 'install-' + Date.now() + '-' + Math.random().toString(36).slice(2); }
     }
     if (!Array.isArray(state.focusHistory)) state.focusHistory = [];
+    if (typeof state.onboardingComplete !== 'boolean') {
+      const hasExistingWork=(state.assignments?.length||0)+(state.units?.length||0)+(state.commitments?.length||0)+(state.points||0)>0;
+      state.onboardingComplete=hasExistingWork||!!(state.name&&state.name!=='Student');
+    }
   }
   ensureStateShape();
 
@@ -401,6 +405,23 @@
   }
 
 
+
+  const productionHomeView=views.home;
+  views.home=function(){
+    const fresh=!state.onboardingComplete && !(state.assignments?.length||0) && !(state.units?.length||0);
+    if(!fresh)return productionHomeView();
+    return `<div class="wizard"><div class="eyebrow">Welcome to REACH</div><h1>Set up your study space.</h1><div class="sub">A calm two-minute setup helps the planner fit around you instead of asking you to fit around it.</div>
+      <div class="card" style="margin-top:18px"><form id="firstRunSetup">
+        <div class="field"><label>What should we call you?</label><input class="input" name="name" autocomplete="given-name" placeholder="First name" required></div>
+        <div class="field"><label>Semester / study period</label><input class="input" name="semester" placeholder="e.g. Semester 1, 2027"></div>
+        <div class="grid g2"><div class="field"><label>Focus block</label><select class="select" name="focus"><option value="10">10 min</option><option value="15" selected>15 min</option><option value="20">20 min</option><option value="25">25 min</option><option value="30">30 min</option></select></div><div class="field"><label>Recharge break</label><select class="select" name="break"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="15">15 min</option></select></div></div>
+        <div class="notice"><strong>Your data, your choice.</strong><br>You can use REACH only on this device, or create an account later to sync securely across devices. Uploaded documents are read in your browser; the original files are not stored in your account.</div>
+        <button class="btn btn-primary" type="submit">Start my planner →</button>
+      </form></div>
+      <div class="callout" style="margin-top:14px"><strong>Wellbeing support, not medical care.</strong><br>REACH helps with planning, focus and reducing study overwhelm. It does not diagnose conditions or replace professional or emergency support.</div>
+    </div>`;
+  };
+
   views['add-assignment']=function(){
     if(!state.units?.length)return `<div class="wizard"><div class="eyebrow">Add assignment</div><h1>Add your unit first.</h1><div class="sub">Assignments stay connected to a unit so deadlines, outlines and plans remain organised.</div><div class="card" style="margin-top:16px"><div class="notice">Add a unit manually or upload its unit outline, then come back to create the assignment.</div><button class="btn btn-primary" style="margin-top:14px;width:100%" data-nav="outline-upload">Add a unit / outline →</button></div></div>`;
     return `<div class="wizard"><div class="eyebrow">Add assignment · 1 / 4</div><h1>Start with the basics.</h1><div class="sub">One assignment. Four calm steps: details, brief, understanding and a plan you can edit.</div>
@@ -643,6 +664,18 @@
   }
 
   function wireAssignmentsOrHome(root){
+    const setup=root.querySelector('#firstRunSetup');
+    if(setup)setup.addEventListener('submit',e=>{
+      e.preventDefault();
+      const fd=new FormData(setup);
+      state.name=normaliseText(fd.get('name')||'Student')||'Student';
+      state.semester=normaliseText(fd.get('semester')||'');
+      state.focusMinutes=Math.max(5,Math.min(90,+fd.get('focus')||15));
+      state.breakMinutes=Math.max(5,Math.min(30,+fd.get('break')||10));
+      state.onboardingComplete=true;
+      save();toast('Your planner is ready');render();
+    });
+
     previousWire(root);
     root.querySelectorAll('[data-step]').forEach(old=>{
       const b=old.cloneNode(true);old.replaceWith(b);
