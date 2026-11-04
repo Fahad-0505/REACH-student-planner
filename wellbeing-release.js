@@ -56,6 +56,11 @@
     if (!Array.isArray(state.rewards)) state.rewards = [];
     if (!state.accountPrefs) state.accountPrefs = { cloudSync: true };
     if (!state.lastSavedAt) state.lastSavedAt = new Date().toISOString();
+    if (!state.lastCloudSyncAt) state.lastCloudSyncAt = '';
+    if (!state.installId) {
+      try { state.installId = crypto.randomUUID(); }
+      catch { state.installId = 'install-' + Date.now() + '-' + Math.random().toString(36).slice(2); }
+    }
     if (!Array.isArray(state.focusHistory)) state.focusHistory = [];
   }
   ensureStateShape();
@@ -630,10 +635,18 @@
       const {data,error}=await sb.from('planner_state').select('data,updated_at').eq('user_id',authUser.id).maybeSingle();
       if(error)throw error;
       if(data?.data&&Object.keys(data.data).length){
-        cloudApplying=true;
         const cloud=data.data;
+        const cloudTime=new Date(data.updated_at||cloud.lastSavedAt||0).getTime()||0;
+        const localTime=new Date(state.lastSavedAt||0).getTime()||0;
+        const localHasWork=(state.assignments?.length||0)+(state.units?.length||0)+(state.commitments?.length||0)+(state.points||0)>0;
+        if(localHasWork && localTime>cloudTime+5000){
+          const useLocal=confirm('This device has newer planner changes than the copy in your account. Press OK to keep this device version and sync it to your account, or Cancel to load the cloud version instead.');
+          if(useLocal){ await syncCloudNow(); toast('Newer device changes synced to your account'); return; }
+        }
+        cloudApplying=true;
         state=Object.assign(structuredClone(defaults),cloud);
         state.units=Array.isArray(cloud.units)?cloud.units:structuredClone(defaults.units);
+        state.lastCloudSyncAt=data.updated_at||cloud.lastCloudSyncAt||new Date().toISOString();
         ensureStateShape();
         localStorage.setItem(KEY,JSON.stringify(state));
         cloudApplying=false;applyTheme();render();toast('Your account planner is loaded');
@@ -646,9 +659,10 @@
     if(!sb||!authUser||cloudApplying)return;
     ensureStateShape();
     try{
-      const payload={...state,lastSavedAt:new Date().toISOString()};
-      state.lastSavedAt=payload.lastSavedAt;
-      const {error}=await sb.from('planner_state').upsert({user_id:authUser.id,data:payload,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+      const now=new Date().toISOString();
+      const payload={...state,lastSavedAt:now,lastCloudSyncAt:now};
+      state.lastSavedAt=now;state.lastCloudSyncAt=now;
+      const {error}=await sb.from('planner_state').upsert({user_id:authUser.id,data:payload,updated_at:now},{onConflict:'user_id'});
       if(error)throw error;
       const pill=document.getElementById('syncPill');if(pill)pill.textContent='Synced';
       return true;
@@ -674,8 +688,8 @@
     if(create)create.addEventListener('click',async()=>{
       if(!sb){toast('Account service is still loading');return}
       const form=root.querySelector('#authForm'),fd=new FormData(form),email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
-      if(!email||password.length<8){toast('Enter an email and a password of at least 8 characters');return}
-      const {data,error}=await sb.auth.signUp({email,password,options:{data:{first_name:state.name||''}}});
+      if(!email||password.length<10){toast('Use your email and a password of at least 10 characters');return}
+      const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{first_name:state.name||''}}});
       if(error)toast(error.message);else if(data.session)toast('Account created and signed in');else toast('Account created — check your email to confirm it');
     });
     const forgot=root.querySelector('#forgotPassword');if(forgot)forgot.addEventListener('click',async()=>{
@@ -688,7 +702,7 @@
     const recovery=root.querySelector('#passwordRecoveryForm');if(recovery)recovery.addEventListener('submit',async e=>{
       e.preventDefault();if(!sb)return;
       const password=String(new FormData(recovery).get('password')||'');
-      if(password.length<8){toast('Use at least 8 characters');return}
+      if(password.length<10){toast('Use at least 10 characters');return}
       const {error}=await sb.auth.updateUser({password});
       if(error)toast(error.message);else{authRecoveryMode=false;toast('Password updated');render()}
     });
