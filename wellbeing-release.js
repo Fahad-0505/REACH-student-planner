@@ -219,6 +219,43 @@
     };
   }
 
+  let tesseractLoading=null;
+  async function ensureTesseract(){
+    if(window.Tesseract)return window.Tesseract;
+    if(tesseractLoading)return tesseractLoading;
+    tesseractLoading=new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      s.async=true;
+      s.onload=()=>resolve(window.Tesseract);
+      s.onerror=()=>reject(new Error('OCR reader could not load. Check your internet connection and try again.'));
+      document.head.appendChild(s);
+    });
+    return tesseractLoading;
+  }
+
+  async function ocrPdfDocument(pdf,maxPages=12){
+    const T=await ensureTesseract();
+    const out=[];
+    const pages=Math.min(pdf.numPages,maxPages);
+    for(let p=1;p<=pages;p++){
+      const page=await pdf.getPage(p);
+      const viewport=page.getViewport({scale:1.65});
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.ceil(viewport.width);
+      canvas.height=Math.ceil(viewport.height);
+      const ctx=canvas.getContext('2d',{willReadFrequently:true});
+      await page.render({canvasContext:ctx,viewport}).promise;
+      const result=await T.recognize(canvas,'eng');
+      const text=normaliseText(result?.data?.text||'');
+      if(text)out.push(text);
+      canvas.width=1;canvas.height=1;
+    }
+    const joined=normaliseText(out.join('\n'));
+    if(joined.length<30)throw new Error('I could not read enough text from this scanned PDF. Try a clearer file or paste the instructions.');
+    return joined;
+  }
+
   async function extractPdfText(file) {
     if (!window.pdfjsLib) throw new Error('PDF reader could not load. Check the internet connection and try again.');
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -239,9 +276,18 @@
       lines.push(...pageLines);
     }
     const text=normaliseText(lines.join('\n'));
-    if(text.length<40) throw new Error('This PDF appears to be scanned/image-based. Please paste the brief text instead.');
-    return text;
+    if(text.length>=40)return text;
+    toast('This looks like a scanned PDF · using on-device OCR…');
+    return ocrPdfDocument(pdf);
   }
+
+  window.REACH_OCR_PDF=async function(file){
+    if(!window.pdfjsLib)throw new Error('PDF reader could not load.');
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    return ocrPdfDocument(pdf);
+  };
+
   async function extractDocumentText(file) {
     if (!file || !file.name) return '';
     const name=file.name.toLowerCase();
