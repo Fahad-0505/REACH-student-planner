@@ -460,9 +460,9 @@
   const priorSettingsView=views.settings;
   views.settings=function(){
     const base=priorSettingsView();
-    const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><div class="toolbar"><button class="btn btn-outline" id="signOutAccount">Sign out</button><button class="btn btn-outline" id="signOutAndClear">Sign out & clear this device</button></div><button class="btn btn-outline" id="deleteCloudPlanner">Delete my synced planner data</button></div></div>`:
-      `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="8" placeholder="Password (8+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
-    const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="8" placeholder="New password (8+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
+    const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><div class="toolbar"><button class="btn btn-outline" id="signOutAccount">Sign out</button><button class="btn btn-outline" id="signOutAndClear">Sign out & clear this device</button></div><button class="btn btn-outline" id="deleteCloudPlanner">Delete my synced planner data</button><button class="btn btn-danger" id="deleteAccountCompletely">Delete my account permanently</button></div></div>`:
+      `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="10" placeholder="Password (10+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
+    const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="10" placeholder="New password (10+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
     return base+account+recovery+`<div class="card" style="margin-top:16px"><h2>Wellbeing & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service. Students stay in control of plans and can edit or reschedule tasks without penalty.</div></div>`;
   };
 
@@ -720,6 +720,21 @@
       const {error}=await sb.from('planner_state').delete().eq('user_id',authUser.id);
       if(error){toast(error.message);return}
       state=structuredClone(defaults);ensureStateShape();localStorage.setItem(KEY,JSON.stringify(state));applyTheme();toast('Synced planner data deleted');render();
+    });
+
+    const deleteAccount=root.querySelector('#deleteAccountCompletely');if(deleteAccount)deleteAccount.addEventListener('click',async()=>{
+      if(!sb||!authUser)return;
+      if(!confirm('Permanently delete your REACH Student Planner account and all synced planner data? This cannot be undone.'))return;
+      const typed=prompt('Type DELETE to confirm permanent account deletion.');
+      if(typed!=='DELETE'){toast('Account deletion cancelled');return}
+      try{
+        const {data,error}=await sb.functions.invoke('delete-account',{body:{}});
+        if(error||!data?.ok)throw error||new Error(data?.error||'Account deletion failed');
+        try{await sb.auth.signOut()}catch{}
+        authUser=null;authRecoveryMode=false;
+        state=structuredClone(defaults);ensureStateShape();
+        localStorage.setItem(KEY,JSON.stringify(state));applyTheme();render();toast('Your account and synced data were permanently deleted');
+      }catch(err){console.warn('Account deletion failed',err);toast('Account deletion could not be completed. Try again while signed in.')}
     });
   }
 
