@@ -440,7 +440,7 @@
       <div class="sub">Upload the actual brief or paste the instructions. The planner extracts planning requirements; it does not write the assignment.</div>
       <div class="steps"><div class="on"></div><div class="on"></div><div></div><div></div></div>
       <div class="card"><form id="smartAssignmentBrief">
-        <div class="field"><label>Upload brief</label><div class="file-box"><input type="file" name="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"></div><div class="sub">PDF, DOCX or TXT. Scanned PDFs may need pasted text.</div></div>
+        <div class="field"><label>Upload brief</label><div class="file-box"><input type="file" name="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"></div><div class="sub">PDF, DOCX or TXT. Scanned PDFs are read with on-device OCR when needed.</div></div>
         <div class="field"><label>Or paste the assignment brief / instructions</label><textarea class="textarea" name="brief" placeholder="Paste the actual instructions here...">${esc(d.briefText||d.brief||'')}</textarea></div>
         <div class="notice"><strong>Privacy:</strong> the document is read in your browser. The original file is not uploaded. If you sign in, the extracted text and planning data can be synced to your account.</div>
         <div class="toolbar"><button class="btn btn-outline" type="button" data-nav="add-assignment">← Back</button><button class="btn btn-primary" id="readBriefButton" type="submit">Read brief & continue →</button></div>
@@ -856,6 +856,12 @@
 
   initCloud();
   render();
+  try{
+    const shortcut=new URLSearchParams(location.search).get('open');
+    if(['add-assignment','focus','planner'].includes(shortcut)){
+      setTimeout(()=>{nav(shortcut);history.replaceState({},'',location.pathname+location.hash)},0);
+    }
+  }catch{}
   setTimeout(maybeSendGentleReminder,1800);
   setInterval(maybeSendGentleReminder,20*60*1000);
 })();
