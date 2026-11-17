@@ -38,6 +38,16 @@
     .reward-card.claimed{opacity:.72}
     .auth-panel{display:grid;gap:12px}
     .sync-state{font-size:12px;color:var(--muted)}
+    .confidence-scale{display:grid;grid-template-columns:repeat(10,minmax(34px,1fr));gap:6px;margin-top:8px}
+    .confidence-scale label{position:relative}
+    .confidence-scale input{position:absolute;opacity:0;pointer-events:none}
+    .confidence-scale span{display:grid;place-items:center;min-height:40px;border:1px solid var(--line);border-radius:12px;background:white;font-weight:800;cursor:pointer}
+    .confidence-scale input:checked+span{background:var(--green);color:white;border-color:var(--green)}
+    .accountability-history{display:grid;gap:8px;margin-top:12px}
+    .accountability-entry{padding:12px;border:1px solid var(--line);border-radius:15px;background:#f8fbf8}
+    .accountability-entry small{color:var(--muted)}
+    .privacy-list{margin:10px 0 0;padding-left:18px;color:var(--muted);line-height:1.55}
+    @media(max-width:560px){.confidence-scale{grid-template-columns:repeat(5,1fr)}}
     html.dark .brief-insight,html.dark .feedback-item,html.dark .plan-row{background:#14281c!important;border-color:#355441!important}
     html.dark .feedback-item.missing{background:#443b20!important;color:#f8e6a0!important}
     html.dark .reward-card{background:linear-gradient(135deg,#40371d,#302944)!important}
@@ -63,6 +73,12 @@
       catch { state.installId = 'install-' + Date.now() + '-' + Math.random().toString(36).slice(2); }
     }
     if (!Array.isArray(state.focusHistory)) state.focusHistory = [];
+    if (!state.accountability || typeof state.accountability !== 'object') state.accountability = {};
+    state.accountability.enabled = !!state.accountability.enabled;
+    if (typeof state.accountability.personName !== 'string') state.accountability.personName = '';
+    if (typeof state.accountability.email !== 'string') state.accountability.email = '';
+    if (!Array.isArray(state.accountability.history)) state.accountability.history = [];
+    if (!state.accountability.pending || typeof state.accountability.pending !== 'object') state.accountability.pending = null;
     if (typeof state.onboardingComplete !== 'boolean') {
       const hasExistingWork=(state.assignments?.length||0)+(state.units?.length||0)+(state.commitments?.length||0)+(state.points||0)>0;
       state.onboardingComplete=hasExistingWork||!!(state.name&&state.name!=='Student');
@@ -406,6 +422,89 @@
 
 
 
+
+  let deferredInstallPrompt=null;
+  window.addEventListener('beforeinstallprompt',e=>{
+    e.preventDefault();
+    deferredInstallPrompt=e;
+    if(screen==='settings')render();
+  });
+  window.addEventListener('appinstalled',()=>{
+    deferredInstallPrompt=null;
+    toast('REACH Student Planner installed');
+    if(screen==='settings')render();
+  });
+
+  function isStandaloneApp(){
+    return !!(window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone);
+  }
+  function isIOSDevice(){
+    return /iphone|ipad|ipod/i.test(navigator.userAgent||'');
+  }
+  function updateConnectionStatus(){
+    const pill=document.getElementById('syncPill');if(!pill)return;
+    if(!navigator.onLine){pill.textContent='Offline · saved locally';return}
+    pill.textContent=authUser?'Synced account':'Saved on this device';
+  }
+  window.addEventListener('online',()=>{updateConnectionStatus();if(authUser)syncCloudNow()});
+  window.addEventListener('offline',updateConnectionStatus);
+
+  function queueAccountabilityWin(a,step,stepIndex){
+    ensureStateShape();
+    if(!state.accountability.enabled)return;
+    state.accountability.pending={
+      id:'win-'+Date.now(),
+      assignmentId:a.id,
+      assignmentTitle:String(a.title||'Assignment'),
+      unit:String(a.unit||''),
+      stepIndex,
+      taskTitle:String(step?.[0]||'Completed task'),
+      completedAt:new Date().toISOString()
+    };
+  }
+  function toggleAssignmentStep(aid,i){
+    const a=state.assignments.find(x=>x.id===aid);
+    if(!a||!a.steps?.[i])return;
+    const was=!!a.steps[i][2];
+    a.steps[i][2]=!was;
+    state.points=Math.max(0,state.points+(was?-10:10));
+    if(!was){
+      queueAccountabilityWin(a,a.steps[i],i);
+      toast(state.accountability.enabled?'Step complete · check-in ready in Progress':'Step complete · +10 growth points');
+    }else if(state.accountability?.pending?.assignmentId===a.id && state.accountability?.pending?.stepIndex===i){
+      state.accountability.pending=null;
+    }
+    save();render();
+  }
+  function accountabilityEmailText(checkin){
+    const who=state.name&&state.name!=='Student'?state.name:'A REACH student';
+    const lines=[
+      'Hi '+(state.accountability.personName||'there')+',',
+      '',
+      who+' is sharing a study win from REACH Student Planner.',
+      '',
+      'Completed: '+(checkin.taskTitle||'Task'),
+      checkin.assignmentTitle?'Assignment: '+checkin.assignmentTitle:'',
+      checkin.unit?'Unit: '+checkin.unit:'',
+      checkin.confidence?('Confidence: '+checkin.confidence+'/10'):'',
+      checkin.reflection?('Reflection: '+checkin.reflection):'',
+      '',
+      'Sent by the student from REACH Student Planner.'
+    ].filter(Boolean);
+    return lines.join('\n');
+  }
+  function openAccountabilityEmail(checkin){
+    const email=normaliseText(state.accountability.email||'');
+    if(!email){toast('Add an accountability email in Settings first');return}
+    const subject='REACH study win'+(state.name&&state.name!=='Student'?' · '+state.name:'');
+    location.href='mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(accountabilityEmailText(checkin));
+  }
+  function accountabilityHistoryHtml(){
+    const items=(state.accountability?.history||[]).slice(0,3);
+    if(!items.length)return '';
+    return '<div class="accountability-history">'+items.map(x=>'<div class="accountability-entry"><strong>'+esc(x.taskTitle||'Study win')+'</strong><div><small>'+esc(x.assignmentTitle||'')+(x.confidence?' · confidence '+Number(x.confidence)+'/10':'')+'</small></div>'+(x.reflection?'<div class="sub" style="margin-top:5px">'+esc(x.reflection)+'</div>':'')+'</div>').join('')+'</div>';
+  }
+
   const productionHomeView=views.home;
   views.home=function(){
     const fresh=!state.onboardingComplete && !(state.assignments?.length||0) && !(state.units?.length||0);
@@ -515,9 +614,24 @@
     const pending=[...state.rewards].filter(r=>!r.claimed).sort((a,b)=>a.points-b.points);
     const next=pending.find(r=>r.points>state.points)||pending[0]||null;
     const completed=state.assignments.reduce((n,a)=>n+doneCount(a),0);
+    const acc=state.accountability||{},win=acc.pending;
+    const confidence=[1,2,3,4,5,6,7,8,9,10].map(n=>`<label><input type="radio" name="confidence" value="${n}" ${n===7?'checked':''}><span>${n}</span></label>`).join('');
+    const accountabilityCard=!acc.enabled
+      ?`<div class="card" style="margin-top:16px"><h2>Optional accountability</h2><div class="sub">Choose a coach, parent, mentor or support person in Settings if sharing wins helps you stay connected. Nothing is sent automatically.</div><button class="btn btn-soft" style="margin-top:12px" data-nav="settings">Set up accountability</button></div>`
+      :`<div class="card" style="margin-top:16px"><div class="eyebrow">Optional accountability</div><h2>${win?'Pause and notice the win.':'Your check-ins'}</h2>
+        ${win?`<div class="notice"><strong>${esc(win.taskTitle)}</strong><br>${esc(win.assignmentTitle)}${win.unit?' · '+esc(win.unit):''}</div>
+          <form id="accountabilityCheckinForm" style="margin-top:14px">
+            <div class="field"><label>How confident do you feel about this work now?</label><div class="confidence-scale" role="radiogroup" aria-label="Confidence from 1 to 10">${confidence}</div></div>
+            <div class="field"><label>Short reflection (optional)</label><textarea class="textarea" name="reflection" maxlength="500" placeholder="What went well, what still feels unclear, or what would you like support with?"></textarea></div>
+            <div class="toolbar"><button class="btn btn-outline" type="submit" data-action="save">Save check-in</button>${acc.email?`<button class="btn btn-primary" type="submit" data-action="email">Email ${esc(acc.personName||'my support person')} my win</button>`:''}</div>
+          </form>`
+        :`<div class="notice">Complete an assignment task and your next optional confidence check-in will appear here.</div>`}
+        ${accountabilityHistoryHtml()}
+      </div>`;
     return `<div class="eyebrow">Progress</div><h1>Look how far you’ve grown.</h1><div class="sub">Progress is more than a finished assignment. Rewards are chosen by you — never taken away.</div>
       <div class="card" style="margin-top:18px;background:linear-gradient(135deg,var(--mint),var(--lav))"><div class="eyebrow">Your growth points</div><strong style="font-size:54px">${state.points}</strong><div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,next?state.points/Math.max(1,next.points)*100:100)}%"></div></div><div class="sub">${next?`${Math.max(0,next.points-state.points)} points until “${esc(next.title)}”`:'Your rewards are yours to enjoy.'}</div></div>
       <div class="kpi-grid" style="margin-top:14px"><div class="kpi"><strong>${completed}</strong><span>Small steps done</span></div><div class="kpi"><strong>${state.focusHistory.length}</strong><span>Focus sessions</span></div><div class="kpi"><strong>${state.rewards.filter(r=>r.claimed).length}</strong><span>Rewards enjoyed</span></div><div class="kpi"><strong>${state.rewards.filter(r=>state.points>=r.points&&!r.claimed).length}</strong><span>Rewards ready</span></div></div>
+      ${accountabilityCard}
       <div class="card" style="margin-top:16px"><h2>Your rewards</h2><div class="sub">Add something you genuinely enjoy — a hobby, favourite food, game, walk, movie, café visit or anything meaningful to you.</div>
         <div class="reward-list">${state.rewards.length?state.rewards.map(rewardCard).join(''):`<div class="empty">No rewards added yet.</div>`}</div>
         <form id="rewardForm" class="grid g2" style="margin-top:14px"><div class="field"><label>My reward</label><input class="input" name="title" required placeholder="e.g. 1 hour of gaming"></div><div class="field"><label>Unlock at</label><input class="input" type="number" min="20" max="5000" step="10" name="points" value="250" required></div><button class="btn btn-primary" style="grid-column:1/-1">Add reward</button></form>
@@ -531,7 +645,22 @@
     const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><div class="toolbar"><button class="btn btn-outline" id="signOutAccount">Sign out</button><button class="btn btn-outline" id="signOutAndClear">Sign out & clear this device</button></div><button class="btn btn-outline" id="deleteCloudPlanner">Delete my synced planner data</button><button class="btn btn-danger" id="deleteAccountCompletely">Delete my account permanently</button></div></div>`:
       `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="10" placeholder="Password (10+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
     const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="10" placeholder="New password (10+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
-    return base+account+recovery+`<div class="card" style="margin-top:16px"><h2>Wellbeing & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service. Students stay in control of plans and can edit or reschedule tasks without penalty.</div></div>`;
+    const acc=state.accountability||{};
+    const installed=isStandaloneApp();
+    const installHelp=installed?'Installed on this device':deferredInstallPrompt?'Ready to install':isIOSDevice()?'On iPhone/iPad: open Share, then choose “Add to Home Screen”.':'Use your browser menu and choose Install app / Add to Home screen when available.';
+    return base+account+recovery+`
+      <div class="card" style="margin-top:16px"><h2>Accountability (optional)</h2><div class="sub">Choose someone you trust if sharing wins helps. Check-ins stay private in your planner unless you explicitly choose to email them.</div>
+        <form id="accountabilitySettings" style="margin-top:12px">
+          <label class="setting" style="justify-content:flex-start"><input type="checkbox" name="enabled" ${acc.enabled?'checked':''}> <span><strong>Enable accountability check-ins</strong><span class="sub">Ask for a confidence rating after completed assignment steps.</span></span></label>
+          <div class="grid g2"><div class="field"><label>Support person / coach name</label><input class="input" name="personName" maxlength="80" value="${esc(acc.personName||'')}" placeholder="e.g. Debbie"></div><div class="field"><label>Email</label><input class="input" type="email" name="email" value="${esc(acc.email||'')}" placeholder="name@example.com"></div></div>
+          <button class="btn btn-primary" type="submit">Save accountability settings</button>
+        </form>
+        <div class="notice" style="margin-top:12px">The app never sends progress automatically. “Email my win” opens a pre-filled email on the student’s device so they can review it before sending.</div>
+      </div>
+      <div class="card" style="margin-top:16px"><h2>Install REACH Student Planner</h2><div class="sub">${esc(installHelp)}</div>${!installed&&deferredInstallPrompt?'<button class="btn btn-primary" id="installAppButton" style="margin-top:12px">Install app</button>':''}</div>
+      <div class="card" style="margin-top:16px"><h2>Wellbeing, data & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service.</div>
+        <ul class="privacy-list"><li>Your planner is saved on this device first.</li><li>If you sign in, planner data can sync to your private account row protected by database access rules.</li><li>Uploaded PDFs/DOCX files are read in your browser; the original file is not stored by the planner.</li><li>Extracted brief text can sync with your planner so you can continue on another device.</li><li>You can export a backup, delete synced planner data, or permanently delete your account.</li><li>Accountability emails are always student-initiated.</li></ul>
+      </div>`;
   };
 
   function wireNav(root){
@@ -634,6 +763,21 @@
     });
     root.querySelectorAll('[data-claim-reward]').forEach(b=>b.addEventListener('click',()=>{const r=state.rewards.find(x=>x.id===b.dataset.claimReward);if(r&&state.points>=r.points){r.claimed=true;r.claimedAt=new Date().toISOString();save();toast('Enjoy it — you earned this');render()}}));
     root.querySelectorAll('[data-remove-reward]').forEach(b=>b.addEventListener('click',()=>{state.rewards=state.rewards.filter(x=>x.id!==b.dataset.removeReward);save();render()}));
+    const af=root.querySelector('#accountabilityCheckinForm');
+    if(af)af.addEventListener('submit',e=>{
+      e.preventDefault();ensureStateShape();
+      const pending=state.accountability.pending;if(!pending)return;
+      const fd=new FormData(af),confidence=Math.max(1,Math.min(10,+fd.get('confidence')||7)),reflection=normaliseText(fd.get('reflection')||'').slice(0,500);
+      const checkin={...pending,confidence,reflection,savedAt:new Date().toISOString()};
+      state.accountability.history.unshift(checkin);
+      state.accountability.history=state.accountability.history.slice(0,50);
+      state.accountability.pending=null;
+      const action=e.submitter?.dataset.action||'save';
+      save();
+      if(action==='email'&&state.accountability.email){openAccountabilityEmail(checkin);toast('Email draft opened — review it before sending')}
+      else toast('Check-in saved');
+      render();
+    });
   }
 
   function wirePlanView(root){
@@ -642,11 +786,8 @@
     root.querySelectorAll('[data-step]').forEach(old=>{
       const b=old.cloneNode(true);old.replaceWith(b);
       b.addEventListener('click',()=>{
-        const [aid,i]=b.dataset.step.split(':').map(Number),a=state.assignments.find(x=>x.id===aid);
-        if(!a||!a.steps?.[i])return;
-        const was=!!a.steps[i][2];a.steps[i][2]=!was;
-        state.points=Math.max(0,state.points+(was?-10:10));
-        save();render();
+        const [aid,i]=b.dataset.step.split(':').map(Number);
+        toggleAssignmentStep(aid,i);
       });
     });
     const edit=root.querySelector('#editAssignmentPlan');
@@ -680,10 +821,8 @@
     root.querySelectorAll('[data-step]').forEach(old=>{
       const b=old.cloneNode(true);old.replaceWith(b);
       b.addEventListener('click',()=>{
-        const [aid,i]=b.dataset.step.split(':').map(Number),a=state.assignments.find(x=>x.id===aid);
-        if(!a||!a.steps?.[i])return;
-        const was=!!a.steps[i][2];a.steps[i][2]=!was;
-        state.points=Math.max(0,state.points+(was?-10:10));save();render();
+        const [aid,i]=b.dataset.step.split(':').map(Number);
+        toggleAssignmentStep(aid,i);
       });
     });
   }
@@ -841,6 +980,21 @@
         localStorage.setItem(KEY,JSON.stringify(state));applyTheme();render();toast('Your account and synced data were permanently deleted');
       }catch(err){console.warn('Account deletion failed',err);toast('Account deletion could not be completed. Try again while signed in.')}
     });
+    const afs=root.querySelector('#accountabilitySettings');if(afs)afs.addEventListener('submit',e=>{
+      e.preventDefault();ensureStateShape();const fd=new FormData(afs);
+      state.accountability.enabled=fd.get('enabled')==='on';
+      state.accountability.personName=normaliseText(fd.get('personName')||'').slice(0,80);
+      state.accountability.email=normaliseText(fd.get('email')||'').slice(0,160);
+      if(state.accountability.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.accountability.email)){toast('Enter a valid email address');return}
+      if(!state.accountability.enabled)state.accountability.pending=null;
+      save();toast('Accountability settings saved');render();
+    });
+    const install=root.querySelector('#installAppButton');if(install)install.addEventListener('click',async()=>{
+      if(!deferredInstallPrompt){toast(isIOSDevice()?'Use Share → Add to Home Screen':'Use your browser menu to install this app');return}
+      try{deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice}catch(err){console.warn('Install prompt failed',err)}
+      deferredInstallPrompt=null;render();
+    });
+
   }
 
   wire=function(root){
@@ -862,6 +1016,7 @@
       setTimeout(()=>{nav(shortcut);history.replaceState({},'',location.pathname+location.hash)},0);
     }
   }catch{}
+  updateConnectionStatus();
   setTimeout(maybeSendGentleReminder,1800);
   setInterval(maybeSendGentleReminder,20*60*1000);
 })();
