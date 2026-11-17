@@ -7,6 +7,7 @@
   const SUPABASE_URL = 'https://ihqjwltganivvmkkehlk.supabase.co';
   const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_rYNGSAYibuEuB9ruCwe88g_Vbu8KkqS';
   const MAX_BRIEF_CHARS = 220000;
+  const RELEASE_VERSION = '1.0.0';
 
   const previousWire = wire;
   const previousSave = save;
@@ -518,6 +519,22 @@
     return '<div class="accountability-history">'+items.map(x=>'<div class="accountability-entry"><strong>'+esc(x.taskTitle||'Study win')+'</strong><div><small>'+esc(x.assignmentTitle||'')+(x.confidence?' · confidence '+Number(x.confidence)+'/10':'')+'</small></div>'+(x.reflection?'<div class="sub" style="margin-top:5px">'+esc(x.reflection)+'</div>':'')+'</div>').join('')+'</div>';
   }
 
+  function diagnosticSummary(){
+    ensureStateShape();
+    return [
+      'REACH Student Planner '+RELEASE_VERSION,
+      'Online: '+(navigator.onLine?'yes':'no'),
+      'Mode: '+(isStandaloneApp()?'installed PWA':'browser'),
+      'Account: '+(authUser?'signed in':'local only'),
+      'Last local save: '+(state.lastSavedAt||'not recorded'),
+      'Last cloud sync: '+(state.lastCloudSyncAt||'not synced'),
+      'Schema: '+(state.schemaVersion||'legacy'),
+      'Units: '+(state.units?.length||0),
+      'Assignments: '+(state.assignments?.length||0),
+      'Accountability: '+(state.accountability?.enabled?'enabled':'off')
+    ].join('\n');
+  }
+
   const productionHomeView=views.home;
   views.home=function(){
     const fresh=!state.onboardingComplete && !(state.assignments?.length||0) && !(state.units?.length||0);
@@ -673,6 +690,10 @@
         <div class="notice" style="margin-top:12px">The app never sends progress automatically. “Email my win” opens a pre-filled email on the student’s device so they can review it before sending.</div>
       </div>
       <div class="card" style="margin-top:16px"><h2>Install REACH Student Planner</h2><div class="sub">${esc(installHelp)}</div>${!installed&&deferredInstallPrompt?'<button class="btn btn-primary" id="installAppButton" style="margin-top:12px">Install app</button>':''}</div>
+      <div class="card" style="margin-top:16px"><div class="page-head" style="margin-bottom:8px"><div><h2>System status</h2><div class="sub">Useful if REACH support needs to troubleshoot. This summary contains no assignment text, names, email addresses or uploaded documents.</div></div><span class="status">v${RELEASE_VERSION}</span></div>
+        <div class="grid g2"><div class="kpi"><strong>${navigator.onLine?'Online':'Offline'}</strong><span>Connection</span></div><div class="kpi"><strong>${installed?'Installed':'Browser'}</strong><span>App mode</span></div><div class="kpi"><strong>${authUser?'Signed in':'Local'}</strong><span>Account</span></div><div class="kpi"><strong>${state.lastCloudSyncAt?'Synced':'—'}</strong><span>Cloud status</span></div></div>
+        <button class="btn btn-outline" id="copyDiagnostics" style="margin-top:12px">Copy diagnostic summary</button>
+      </div>
       <div class="card" style="margin-top:16px"><h2>Wellbeing, data & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service.</div>
         <ul class="privacy-list"><li>Your planner is saved on this device first.</li><li>If you sign in, planner data can sync to your private account row protected by database access rules.</li><li>Uploaded PDFs/DOCX files are read in your browser; the original file is not stored by the planner.</li><li>Extracted brief text can sync with your planner so you can continue on another device.</li><li>You can export a backup, delete synced planner data, or permanently delete your account.</li><li>Accountability emails are always student-initiated.</li></ul>
       </div>`;
@@ -1037,6 +1058,11 @@
       if(!deferredInstallPrompt){toast(isIOSDevice()?'Use Share → Add to Home Screen':'Use your browser menu to install this app');return}
       try{deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice}catch(err){console.warn('Install prompt failed',err)}
       deferredInstallPrompt=null;render();
+    });
+
+    const diag=root.querySelector('#copyDiagnostics');if(diag)diag.addEventListener('click',async()=>{
+      try{await navigator.clipboard.writeText(diagnosticSummary());toast('Diagnostic summary copied')}
+      catch{toast('Could not copy diagnostics on this device')}
     });
 
   }
