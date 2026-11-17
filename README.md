@@ -34,13 +34,16 @@ The planner helps students reduce overwhelm by turning assessment requirements i
 - Profile/settings
 - Optional account creation, sign-in and cross-device cloud sync
 - Password recovery and user-controlled local/cloud planner deletion
+- Shared-device protection when switching between different accounts
+- Optional accountability check-ins with 1–10 confidence rating, reflection history and student-initiated email sharing
 - Local data backup export/import
-- Installable/offline-friendly PWA support
+- Scanned-PDF OCR fallback in the browser
+- Installable/offline-friendly PWA support with install guidance and offline status
 
 ## User data model
 The app remains local-first: changes are saved immediately in the browser so the planner works without an account. Students can optionally create an account with email and password. When signed in, the planner state is synced to Supabase in a per-user row protected by Row Level Security.
 
-Synced planner data includes profile preferences, units, assignments, extracted brief text, brief analysis, understanding checks, custom plans, rewards and progress. The original uploaded assignment file is processed in the browser and is not stored in Supabase.
+Synced planner data includes profile preferences, units, assignments, extracted brief text, brief analysis, understanding checks, custom plans, rewards, progress and optional accountability check-ins. The original uploaded assignment file is processed in the browser and is not stored in Supabase.
 
 No real student data is bundled with the repository. Demo content is fictional.
 
