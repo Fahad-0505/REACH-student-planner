@@ -68,6 +68,8 @@
     if (!state.accountPrefs) state.accountPrefs = { cloudSync: true };
     if (!state.lastSavedAt) state.lastSavedAt = new Date().toISOString();
     if (!state.lastCloudSyncAt) state.lastCloudSyncAt = '';
+    if (typeof state.cloudOwnerId !== 'string') state.cloudOwnerId = '';
+    state.schemaVersion = 3;
     if (!state.installId) {
       try { state.installId = crypto.randomUUID(); }
       catch { state.installId = 'install-' + Date.now() + '-' + Math.random().toString(36).slice(2); }
@@ -878,33 +880,62 @@
     try{
       const {data,error}=await sb.from('planner_state').select('data,updated_at').eq('user_id',authUser.id).maybeSingle();
       if(error)throw error;
+      const localHasWork=(state.assignments?.length||0)+(state.units?.length||0)+(state.commitments?.length||0)+(state.points||0)>0;
+      const localBelongsToAnotherAccount=!!state.cloudOwnerId&&state.cloudOwnerId!==authUser.id;
+
       if(data?.data&&Object.keys(data.data).length){
         const cloud=data.data;
         const cloudTime=new Date(data.updated_at||cloud.lastSavedAt||0).getTime()||0;
         const localTime=new Date(state.lastSavedAt||0).getTime()||0;
-        const localHasWork=(state.assignments?.length||0)+(state.units?.length||0)+(state.commitments?.length||0)+(state.points||0)>0;
-        if(localHasWork && localTime>cloudTime+5000){
+
+        if(localHasWork && !localBelongsToAnotherAccount && localTime>cloudTime+5000){
           const useLocal=confirm('This device has newer planner changes than the copy in your account. Press OK to keep this device version and sync it to your account, or Cancel to load the cloud version instead.');
-          if(useLocal){ await syncCloudNow(); toast('Newer device changes synced to your account'); return; }
+          if(useLocal){state.cloudOwnerId=authUser.id;await syncCloudNow();toast('Newer device changes synced to your account');return}
         }
+
+        if(localBelongsToAnotherAccount){
+          toast('Signed in to a different account · loading that account’s planner');
+        }
+
         cloudApplying=true;
         state=Object.assign(structuredClone(defaults),cloud);
         state.units=Array.isArray(cloud.units)?cloud.units:structuredClone(defaults.units);
+        state.cloudOwnerId=authUser.id;
         state.lastCloudSyncAt=data.updated_at||cloud.lastCloudSyncAt||new Date().toISOString();
         ensureStateShape();
         localStorage.setItem(KEY,JSON.stringify(state));
         cloudApplying=false;applyTheme();render();toast('Your account planner is loaded');
       }else{
+        if(localHasWork && state.cloudOwnerId!==authUser.id){
+          const attach=confirm('This device already contains planner data. Press OK to attach and sync this device data to the account you just signed in to. Press Cancel to start a fresh planner for this account.');
+          if(!attach){
+            cloudApplying=true;
+            state=structuredClone(defaults);
+            ensureStateShape();
+            state.cloudOwnerId=authUser.id;
+            localStorage.setItem(KEY,JSON.stringify(state));
+            cloudApplying=false;applyTheme();render();
+            await syncCloudNow();
+            toast('Fresh planner created for this account');
+            return;
+          }
+        }
+        state.cloudOwnerId=authUser.id;
         await syncCloudNow();
       }
-    }catch(err){console.warn('Could not load cloud planner',err);toast('Account connected, but cloud data could not be loaded')}
+    }catch(err){
+      cloudApplying=false;
+      console.warn('Could not load cloud planner',err);
+      toast('Account connected, but cloud data could not be loaded');
+    }
   }
   async function syncCloudNow(){
     if(!sb||!authUser||cloudApplying)return;
     ensureStateShape();
     try{
       const now=new Date().toISOString();
-      const payload={...state,lastSavedAt:now,lastCloudSyncAt:now};
+      state.cloudOwnerId=authUser.id;
+      const payload={...state,lastSavedAt:now,lastCloudSyncAt:now,cloudOwnerId:authUser.id,schemaVersion:3};
       state.lastSavedAt=now;state.lastCloudSyncAt=now;
       const {error}=await sb.from('planner_state').upsert({user_id:authUser.id,data:payload,updated_at:now},{onConflict:'user_id'});
       if(error)throw error;
