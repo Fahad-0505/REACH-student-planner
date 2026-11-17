@@ -40,7 +40,8 @@
     .sync-state{font-size:12px;color:var(--muted)}
     .confidence-scale{display:grid;grid-template-columns:repeat(10,minmax(34px,1fr));gap:6px;margin-top:8px}
     .confidence-scale label{position:relative}
-    .confidence-scale input{position:absolute;opacity:0;pointer-events:none}
+    .confidence-scale input{position:absolute;opacity:0;pointer-events:none;min-height:0;width:1px;height:1px}
+    .setting input[type="checkbox"]{min-height:0;width:20px;height:20px;accent-color:var(--green)}
     .confidence-scale span{display:grid;place-items:center;min-height:40px;border:1px solid var(--line);border-radius:12px;background:white;font-weight:800;cursor:pointer}
     .confidence-scale input:checked+span{background:var(--green);color:white;border-color:var(--green)}
     .accountability-history{display:grid;gap:8px;margin-top:12px}
@@ -51,6 +52,7 @@
     html.dark .brief-insight,html.dark .feedback-item,html.dark .plan-row{background:#14281c!important;border-color:#355441!important}
     html.dark .feedback-item.missing{background:#443b20!important;color:#f8e6a0!important}
     html.dark .reward-card{background:linear-gradient(135deg,#40371d,#302944)!important}
+    html.dark .accountability-entry{background:#14281c!important;border-color:#355441!important}
     @media(max-width:420px){
       .brief-insight-grid{grid-template-columns:1fr}
       .plan-row{grid-template-columns:1fr 82px}
@@ -373,7 +375,16 @@
     if(hours<24)return `is due in about ${Math.max(1,hours)} hour${hours===1?'':'s'}`;
     const days=Math.ceil(hours/24);return `is due in ${days} day${days===1?'':'s'}`;
   }
-  function maybeSendGentleReminder() {
+  async function showPlannerNotification(title,options){
+    if('serviceWorker' in navigator){
+      try{
+        const reg=await navigator.serviceWorker.ready;
+        if(reg?.showNotification){await reg.showNotification(title,options);return true}
+      }catch(err){console.warn('Service-worker notification unavailable',err)}
+    }
+    try{new Notification(title,options);return true}catch{return false}
+  }
+  async function maybeSendGentleReminder() {
     try{
       if(!state.notifications||!('Notification' in window)||Notification.permission!=='granted')return;
       const now=Date.now();
@@ -385,8 +396,8 @@
       const {a}=candidates[0],day=isoDate(new Date()),key=`${a.id}:${day}`,storeKey='reach-gentle-reminders-v1';
       const seen=JSON.parse(localStorage.getItem(storeKey)||'{}');
       if(seen[key])return;
-      new Notification('REACH Student Planner',{body:`${a.title} ${reminderDueText(a.due)}. Choose one small step — you do not need to do everything at once.`,tag:`reach-${a.id}-${day}`});
-      seen[key]=Date.now();localStorage.setItem(storeKey,JSON.stringify(seen));
+      const shown=await showPlannerNotification('REACH Student Planner',{body:`${a.title} ${reminderDueText(a.due)}. Choose one small step — you do not need to do everything at once.`,tag:`reach-${a.id}-${day}`,icon:'assets/favicon.svg'});
+      if(shown){seen[key]=Date.now();localStorage.setItem(storeKey,JSON.stringify(seen))}
     }catch(err){console.warn('Reminder unavailable',err)}
   }
   async function setGentleReminders(enabled) {
@@ -395,7 +406,7 @@
     let permission=Notification.permission;
     if(permission==='default')permission=await Notification.requestPermission();
     state.notifications=permission==='granted';save();
-    toast(state.notifications?'Gentle reminders on while the app is open':'Reminder permission was not enabled');
+    toast(state.notifications?'Gentle reminders enabled':'Reminder permission was not enabled');
     if(state.notifications)maybeSendGentleReminder();
   }
 
@@ -591,7 +602,9 @@
   views['plan-view']=function(){
     const a=selectedAssignment();
     if(!a)return `<div class="empty"><h2>No assignment selected</h2><button class="btn btn-primary" data-nav="add-assignment">Add assignment</button></div>`;
+    const pendingWin=state.accountability?.enabled&&state.accountability?.pending;
     return `<div class="eyebrow">Assignment plan</div><h1>Small steps. Room to breathe.</h1>${assignmentCard(a,true)}
+      ${pendingWin?`<div class="callout" style="margin-top:14px"><strong>Nice work — notice the win.</strong><p style="margin:6px 0 12px">Your optional confidence check-in is ready.</p><button class="btn btn-primary" data-nav="progress">Rate confidence & share my win</button></div>`:''}
       <div class="toolbar" style="margin-top:14px"><button class="btn btn-soft" id="editAssignmentPlan">Edit tasks & timing</button><button class="btn btn-outline" data-nav="planner">Open planner</button><button class="btn btn-outline" id="deleteAssignment">Delete assignment</button></div>
       ${a.briefAnalysis?`<div class="card" style="margin-top:16px"><h2>What the brief asks for</h2>${briefAnalysisHtml(a.briefAnalysis)}${a.briefFileName?`<div class="sub" style="margin-top:10px">Source: ${esc(a.briefFileName)}</div>`:''}</div>`:''}`;
   };
