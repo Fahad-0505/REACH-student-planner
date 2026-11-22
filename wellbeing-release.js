@@ -741,7 +741,8 @@
       </div>
       <div class="card" style="margin-top:16px"><h2>Wellbeing, data & privacy</h2><div class="sub">REACH Student Planner supports organisation, focus and study wellbeing. It is not a medical, diagnostic, counselling or emergency service.</div>
         <ul class="privacy-list"><li>Your planner is saved on this device first.</li><li>If you sign in, planner data can sync to your private account row protected by database access rules.</li><li>Uploaded PDFs/DOCX files are read in your browser; the original file is not stored by the planner.</li><li>Extracted brief text can sync with your planner so you can continue on another device.</li><li>You can export a backup, delete synced planner data, or permanently delete your account.</li><li>Accountability emails are always student-initiated.</li></ul>
-      </div>`;
+      </div>
+      <div class="card" style="margin-top:16px"><h2>Need urgent support?</h2><div class="sub">This planner does not monitor messages, confidence ratings or wellbeing for emergencies. If life is in danger in Australia, call <strong>000</strong>. For confidential crisis support, Lifeline is available 24/7 on <strong>13 11 14</strong> or text <strong>0477 13 11 14</strong>.</div><div class="toolbar" style="margin-top:12px"><a class="btn btn-danger" href="tel:000">Call 000</a><a class="btn btn-outline" href="tel:131114">Call Lifeline</a><a class="btn btn-outline" href="sms:0477131114">Text Lifeline</a></div></div>`;
   };
 
   function wireNav(root){
