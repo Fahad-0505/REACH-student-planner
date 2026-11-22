@@ -1,4 +1,4 @@
-const CACHE='reach-student-planner-v17';
+const CACHE='reach-student-planner-v18';
 const CORE=['./','./index.html','./release-patch.js','./wellbeing-release.js','./manifest.webmanifest','./assets/favicon.svg'];
 
 self.addEventListener('install',event=>{
