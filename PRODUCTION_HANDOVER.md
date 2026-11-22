@@ -1,65 +1,62 @@
 # REACH Student Planner — Production Handover
 
-## Production services
-- **GitHub:** source control and production history.
-- **Render:** production static-site hosting from the `main` branch.
-- **Supabase:** email/password authentication, per-user cloud storage, Realtime cross-device updates and authenticated Edge Functions.
-- **Browser/PWA:** local-first storage, offline shell, document parsing/OCR, focus timer, optional reminders and install-to-home-screen behaviour.
+## Final production target
+- **Public app:** https://reach-adhd-student-planner.onrender.com
+- **Source:** GitHub `Fahad-0505/REACH-student-planner`, branch `main`
+- **Hosting:** Render static site `reach-adhd-student-planner`
+- **Accounts/data:** Supabase project `REACH Student Planner`
+
+A custom domain is not required for handover. REACH can introduce one later without rebuilding the app.
 
 ## Client data flow
-1. Changes are saved to browser local storage immediately.
-2. A client may use the planner without an account, or create a Supabase email/password account.
-3. When signed in, planner state is stored in `public.planner_state` under that user's auth UID.
-4. Row Level Security restricts each row to its authenticated owner.
-5. Realtime updates can refresh another signed-in device.
-6. The app detects account switches on shared devices and will not silently sync one user's retained local planner into another account.
-7. Assignment briefs and unit outlines are processed in the browser. Normal PDFs use PDF.js, DOCX uses Mammoth.js, and scanned PDFs fall back to in-browser OCR.
-8. Original uploaded files are not stored by the planner. Extracted text and planning metadata can sync so the student can continue on another device.
-9. Optional accountability check-ins store a confidence score/reflection in the planner. Email sharing is always initiated by the student and opens a pre-filled email draft on their device.
-10. A client can export/import a JSON backup, delete synced planner data, sign out and clear a device, or permanently delete the account.
+1. Planner changes save to browser local storage immediately.
+2. A client can use the planner locally or create an email/password account.
+3. Signed-in planner state is stored in `public.planner_state` under the authenticated user's UID.
+4. Row Level Security restricts SELECT/INSERT/UPDATE/DELETE to the row owner.
+5. Realtime can update another signed-in device.
+6. Shared-device account switching is guarded so retained local data is never silently attached to a different account.
+7. PDFs, scanned PDFs, DOCX and TXT files are read in the browser. The original file is not stored by the planner.
+8. Extracted brief text and planning metadata may sync so the same account can continue on another device.
+9. Accountability check-ins are optional; email sharing is always initiated by the student.
+10. Clients can export/import a backup, delete synced data, clear a device, or permanently delete their account.
 
-## Quality controls
-- `tests/smoke.mjs` checks JavaScript syntax, PWA configuration and required production/security markers.
-- GitHub Actions runs the smoke check on every push to `main` and on pull requests.
-- The service worker uses a versioned cache and separates navigation fallback from asset caching.
-- Supabase security/performance advisors should be reviewed before each client rollout.
+## Academic-integrity position
+No external generative-AI service is used in this release. This is intentional. Brief analysis identifies planning requirements (deliverable, action words, word length, referencing, sources, structure and key instructions), then compares those requirements with the student's own understanding. The app does not write assessment content, generate references/citations or tell a student that generated work is acceptable.
 
-## Production ownership
-REACH should retain access to:
-- GitHub repository
-- Render workspace/service
-- Supabase organisation/project
-- DNS/custom domain if introduced later
-- Any future email/SMTP provider
-- Any future AI/API provider
+If REACH later considers semantic AI, it should be a separate privacy/academic-integrity review rather than a silent feature addition.
 
-Do not put service-role credentials or third-party API secrets in browser JavaScript.
+## Reminders
+The app supports browser notifications when the platform allows them. Because a PWA cannot guarantee scheduled notifications while fully closed on every browser/OS, the production release also provides **Download calendar reminders (.ics)**. Students can import those deadlines/study targets into their device calendar for reliable native reminders.
 
-## Business decisions still required before broad public rollout
-These are configuration/ownership decisions rather than missing frontend code:
-- Decide whether to use the Render URL or a REACH custom domain.
-- Configure Supabase Auth Site URL/redirect URLs for the final domain.
-- Enable Supabase leaked-password protection in Auth settings.
-- Decide whether REACH wants branded transactional email/SMTP for verification and password reset.
-- Approve client-facing privacy policy/terms/support wording.
-- Decide whether REACH wants a third-party semantic AI service for deeper assignment interpretation. No external AI service is currently used for brief analysis.
-- Decide whether REACH needs true server push notifications while the PWA is completely closed. Current reminders are browser notifications while the app is active; closed-app push requires a push service/VAPID backend.
+## Account security
+- Supabase Auth stores password hashes; the frontend never stores account passwords.
+- New/recovery passwords are required by the app to be at least 12 characters and include uppercase, lowercase, a number and a symbol.
+- Supabase Row Level Security is enabled and has been functionally tested for both owner CRUD and cross-user isolation.
+- Supabase's leaked-password/HIBP protection is not available on the current Free organisation plan. If REACH upgrades Supabase later, enable that option as an additional defence.
+- Permanent account deletion is handled by the authenticated `delete-account` Edge Function.
 
-## Acceptance testing before Fiona's final handover
-Use at least two test accounts/devices and complete the checklist in `RELEASE_CHECKLIST.md`. In particular verify:
-- sign-up/email confirmation/password reset;
-- local-only → account sync;
-- account switch on the same device;
-- cross-device Realtime sync;
-- account deletion;
-- normal PDF, scanned PDF OCR and DOCX brief parsing;
-- understanding check produces brief-specific feedback;
-- custom task dates appear in Planner;
-- focus/recharge cycle;
-- rewards;
-- accountability check-in + email draft;
-- offline reopen after the app has previously loaded;
-- iOS Safari and Android Chrome install behaviour.
+## Supabase Free-plan availability
+The current Supabase organisation is on the Free plan. Free projects can be automatically paused after sustained low activity. The project was restored during final testing and is currently healthy. For a client-facing service that REACH expects to remain continuously available regardless of activity, upgrading the Supabase project is the platform-level reliability option; it is not required to run the application today.
 
-## Maintenance
-GitHub `main` is production. Render is configured for automatic deployment, but deployment status must still be verified after a release. Bump the service-worker cache version whenever frontend files need to invalidate an installed PWA cache.
+## Quality controls completed
+- Production JavaScript/PWA smoke tests in GitHub Actions.
+- Browser acceptance suite for Desktop Chromium, Android-sized Chromium and iPhone-sized WebKit.
+- Live RLS owner CRUD transaction test: passed.
+- Live cross-user SELECT/UPDATE/DELETE isolation test: passed.
+- Supabase performance advisor: no findings.
+- Supabase health advisor: no findings.
+- Frontend scan verifies no Supabase service-role credential is present.
+- Versioned service worker provides offline shell and controlled cache invalidation.
+
+## Deployment
+Render's service is correctly connected to `main` and reports auto-deploy enabled, but Git push-triggered deployments were not firing reliably during final testing. This is an external GitHub↔Render integration issue, not a build failure.
+
+**Reliable handover procedure:** after a production code change, run the GitHub checks, then use Render → service → **Manual Deploy / Deploy latest commit**. This has been tested successfully. The deployment must show the same commit SHA as GitHub `main`.
+
+If REACH wants automatic deployments later, reconnect/re-authorise the Render GitHub integration in the Render dashboard.
+
+## Ownership
+REACH should retain access to GitHub, Render and Supabase. No custom domain, paid SMTP provider or external AI provider is required for this release.
+
+## Support
+Settings includes a privacy-safe **System status** card and **Copy diagnostic summary**. It reports version/connection/install/account/sync counts without copying student names, emails, brief text or uploaded files.
