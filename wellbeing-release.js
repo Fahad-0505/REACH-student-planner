@@ -91,6 +91,13 @@
   }
   ensureStateShape();
 
+  function passwordStrengthError(password=''){
+    const p=String(password);
+    if(p.length<12)return 'Use at least 12 characters';
+    if(!/[a-z]/.test(p)||!/[A-Z]/.test(p)||!/[0-9]/.test(p)||!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?`~]/.test(p))return 'Use uppercase, lowercase, a number and a symbol';
+    return '';
+  }
+
   function normaliseText(s='') {
     return String(s).replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
   }
@@ -711,8 +718,8 @@
   views.settings=function(){
     const base=priorSettingsView().replace('Optional browser reminders while the app/PWA is open. Permission required.','Browser reminders when supported. For reliable reminders while the app is closed, export your study calendar below.');
     const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><div class="toolbar"><button class="btn btn-outline" id="signOutAccount">Sign out</button><button class="btn btn-outline" id="signOutAndClear">Sign out & clear this device</button></div><button class="btn btn-outline" id="deleteCloudPlanner">Delete my synced planner data</button><button class="btn btn-danger" id="deleteAccountCompletely">Delete my account permanently</button></div></div>`:
-      `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="10" placeholder="Password (10+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
-    const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="10" placeholder="New password (10+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
+      `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="12" placeholder="Password (12+ incl. upper/lower/number/symbol)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
+    const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="12" placeholder="New password (10+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
     const acc=state.accountability||{};
     const installed=isStandaloneApp();
     const installHelp=installed?'Installed on this device':deferredInstallPrompt?'Ready to install':isIOSDevice()?'On iPhone/iPad: open Share, then choose “Add to Home Screen”.':'Use your browser menu and choose Install app / Add to Home screen when available.';
@@ -1035,7 +1042,9 @@
     if(create)create.addEventListener('click',async()=>{
       if(!sb){toast('Account service is still loading');return}
       const form=root.querySelector('#authForm'),fd=new FormData(form),email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
-      if(!email||password.length<10){toast('Use your email and a password of at least 10 characters');return}
+      const passwordError=passwordStrengthError(password);
+      if(!email){toast('Enter your email address');return}
+      if(passwordError){toast(passwordError);return}
       const {data,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{first_name:state.name||''}}});
       if(error)toast(error.message);else if(data.session)toast('Account created and signed in');else toast('Account created — check your email to confirm it');
     });
@@ -1049,7 +1058,8 @@
     const recovery=root.querySelector('#passwordRecoveryForm');if(recovery)recovery.addEventListener('submit',async e=>{
       e.preventDefault();if(!sb)return;
       const password=String(new FormData(recovery).get('password')||'');
-      if(password.length<10){toast('Use at least 10 characters');return}
+      const passwordError=passwordStrengthError(password);
+      if(passwordError){toast(passwordError);return}
       const {error}=await sb.auth.updateUser({password});
       if(error)toast(error.message);else{authRecoveryMode=false;toast('Password updated');render()}
     });
