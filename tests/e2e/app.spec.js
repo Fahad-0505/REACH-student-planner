@@ -69,9 +69,9 @@ test('assignment brief, understanding check, custom plan, accountability and rew
   await expect(page.getByText(/Academic integrity:/)).toBeVisible();
   await page.getByRole('button', { name: /Read brief & continue/ }).click();
 
-  await expect(page.getByRole('heading', { name: /What does it mean to you/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /What is the brief asking/i })).toBeVisible();
   await page.locator('textarea[name="understanding"]').fill('I need to write a 1500 word report analysing student wellbeing and comparing two support approaches, using APA 7 and at least 8 academic sources, with an introduction, analysis, recommendations and conclusion.');
-  await page.getByRole('button', { name: /Check my understanding/ }).click();
+  await page.getByRole('button', { name: /Compare with my brief/ }).click();
 
   await expect(page.getByRole('heading', { name: 'A clearer starting point.' })).toBeVisible();
   await expect(page.getByText(/planning check, not a grade/i)).toBeVisible();
@@ -88,7 +88,7 @@ test('assignment brief, understanding check, custom plan, accountability and rew
   await page.getByRole('button', { name: /Save assignment plan/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Small steps. Room to breathe.' })).toBeVisible();
-  await expect(page.getByText('1500 words')).toBeVisible();
+  await expect(page.getByText(/1500 word/i)).toBeVisible();
   await expect(page.getByText(/APA 7/i)).toBeVisible();
 
   const checks = page.locator('button.check');
