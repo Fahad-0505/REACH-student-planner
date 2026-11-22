@@ -1,12 +1,14 @@
 # REACH Student Planner — Production Handover
 
 ## Final production target
-- **Public app:** https://reach-adhd-student-planner.onrender.com
+- **Public app:** https://reach-student-planner-final-v4.onrender.com
 - **Source:** GitHub `Fahad-0505/REACH-student-planner`, branch `main`
 - **Hosting:** Render static site `reach-adhd-student-planner`
 - **Accounts/data:** Supabase project `REACH Student Planner`
 
 A custom domain is not required for handover. REACH can introduce one later without rebuilding the app.
+
+A second Render service (`reach-adhd-student-planner`) was created only to diagnose the Git auto-deploy connection. It should not be distributed to clients because the existing production URL is already the established Auth redirect target.
 
 ## Client data flow
 1. Planner changes save to browser local storage immediately.
