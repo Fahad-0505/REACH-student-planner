@@ -89,7 +89,7 @@ test('assignment brief, understanding check, custom plan, accountability and rew
 
   await expect(page.getByRole('heading', { name: 'Small steps. Room to breathe.' })).toBeVisible();
   await expect(page.getByText(/1500 word/i)).toBeVisible();
-  await expect(page.getByText(/APA 7/i)).toBeVisible();
+  await expect(page.getByText('APA 7', { exact: true })).toBeVisible();
 
   const checks = page.locator('button.check');
   await checks.nth(0).click();
