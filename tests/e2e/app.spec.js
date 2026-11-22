@@ -133,6 +133,8 @@ test('settings expose privacy, integrity, account and calendar controls', async 
   await expect(page.getByText(/does not generate assignment answers/i)).toBeVisible();
   await expect(page.getByRole('heading', { name: /Reliable reminders when the app is closed/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Need urgent support?' })).toBeVisible();
+  await expect(page.getByText(/13 11 14/)).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: /Download calendar reminders/ }).click();
