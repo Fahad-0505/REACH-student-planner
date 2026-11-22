@@ -1,7 +1,7 @@
 # REACH Student Planner — Handover Status
 
 **Release:** 1.0 production candidate  
-**Production URL:** https://reach-adhd-student-planner.onrender.com
+**Production URL:** https://reach-student-planner-final-v4.onrender.com
 
 ## Completed
 - Local-first planner and optional authenticated cloud sync
