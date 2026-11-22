@@ -3,7 +3,29 @@ name: Production smoke checks
 on:
   push:
     branches: [main]
+    paths:
+      - 'index.html'
+      - 'wellbeing-release.js'
+      - 'release-patch.js'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'assets/**'
+      - 'tests/smoke.mjs'
+      - '.github/workflows/production-smoke.yml'
   pull_request:
+    paths:
+      - 'index.html'
+      - 'wellbeing-release.js'
+      - 'release-patch.js'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'assets/**'
+      - 'tests/smoke.mjs'
+      - '.github/workflows/production-smoke.yml'
+
+concurrency:
+  group: production-smoke-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
