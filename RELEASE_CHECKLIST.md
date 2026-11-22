@@ -13,7 +13,7 @@ Use this checklist before handing a release to REACH clients.
 - [ ] Delete synced planner data works.
 - [ ] Permanently delete account works.
 - [ ] Supabase RLS/security advisor checked.
-- [ ] Leaked-password protection enabled before broad rollout.
+- [x] Leaked-password advisory reviewed. Feature is Pro+; current Free-plan release uses 12+ character mixed password validation instead.
 
 ## Cross-device sync
 - [ ] Device A changes profile/assignment/reward.
@@ -55,12 +55,12 @@ Use this checklist before handing a release to REACH clients.
 
 ## PWA/mobile/offline
 - [ ] App can be installed on supported Chrome/Edge/Android devices.
-- [ ] iPhone/iPad Add to Home Screen guidance is understandable.
+- [ ] iPhone/iPad Add to Home Screen guidance is understandable on a physical iOS device.
 - [ ] Installed app opens in standalone mode.
 - [ ] Previously loaded app reopens offline.
 - [ ] Offline status is visible.
 - [ ] Navigation fallback works offline without returning HTML for failed image/script requests.
-- [ ] Layout tested at ~320px, ~390px, tablet and desktop widths.
+- [ ] Automated mobile WebKit/Chromium layout checks pass; do one final visual spot-check on REACH's physical phone/tablet.
 - [ ] Keyboard focus indicators visible.
 - [ ] Reduced-motion preference respected.
 
@@ -71,4 +71,7 @@ Use this checklist before handing a release to REACH clients.
 - [ ] Final public domain decision recorded.
 - [ ] Privacy/terms/support wording approved by REACH.
 - [ ] Branded auth email decision recorded.
-- [ ] Optional AI and closed-app push decisions recorded.
+- [x] AI decision recorded: no external generative AI in v1; planning/comprehension support only.
+- [x] Closed-app reminder decision recorded: native calendar (.ics) export is the reliable cross-platform fallback.
+- [x] Render deployment fallback recorded because Git push auto-deploy is not firing reliably.
+- [x] Supabase Free-plan pause risk documented.
