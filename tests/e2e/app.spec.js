@@ -97,7 +97,7 @@ test('assignment brief, understanding check, custom plan, accountability and rew
   await page.getByRole('button', { name: /Rate confidence/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Pause and notice the win.' })).toBeVisible();
-  await page.locator('input[name="confidence"][value="8"]').check();
+  await page.locator('.confidence-scale label:has(input[value="8"]) span').click();
   await page.locator('textarea[name="reflection"]').fill('I understand the first step and know what to do next.');
   await page.getByRole('button', { name: 'Save check-in' }).click();
   await expect(page.getByText(/confidence 8\/10/i)).toBeVisible();
@@ -134,7 +134,7 @@ test('settings expose privacy, integrity, account and calendar controls', async 
   await expect(page.getByRole('heading', { name: /Reliable reminders when the app is closed/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Need urgent support?' })).toBeVisible();
-  await expect(page.getByText(/13 11 14/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Call Lifeline' })).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: /Download calendar reminders/ }).click();
