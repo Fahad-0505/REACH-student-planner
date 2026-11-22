@@ -519,6 +519,42 @@
     return '<div class="accountability-history">'+items.map(x=>'<div class="accountability-entry"><strong>'+esc(x.taskTitle||'Study win')+'</strong><div><small>'+esc(x.assignmentTitle||'')+(x.confidence?' · confidence '+Number(x.confidence)+'/10':'')+'</small></div>'+(x.reflection?'<div class="sub" style="margin-top:5px">'+esc(x.reflection)+'</div>':'')+'</div>').join('')+'</div>';
   }
 
+
+  function icsEscape(value=''){
+    return String(value).replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
+  }
+  function icsStamp(value){
+    const d=value instanceof Date?value:new Date(value);
+    if(Number.isNaN(d.valueOf()))return '';
+    const p=n=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+  }
+  function buildReminderCalendar(){
+    const now=new Date(),stamp=icsStamp(now);
+    const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//REACH ADHD Coaching & Consultancy//Student Planner//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:REACH Student Planner'];
+    for(const a of state.assignments||[]){
+      if(!a?.due)continue;
+      const due=new Date(a.due);if(Number.isNaN(due.valueOf()))continue;
+      const uid=`reach-assignment-${a.id}@student-planner`;
+      lines.push('BEGIN:VEVENT',`UID:${icsEscape(uid)}`,`DTSTAMP:${stamp}`,`DTSTART:${icsStamp(due)}`,`DTEND:${icsStamp(new Date(due.getTime()+30*60000))}`,`SUMMARY:${icsEscape('Due: '+(a.title||'Assignment'))}`,`DESCRIPTION:${icsEscape((a.unit? a.unit+' · ':'')+'REACH Student Planner assignment deadline')}`,'BEGIN:VALARM','TRIGGER:-P1D','ACTION:DISPLAY',`DESCRIPTION:${icsEscape((a.title||'Assignment')+' is due tomorrow')}`,'END:VALARM','BEGIN:VALARM','TRIGGER:-PT2H','ACTION:DISPLAY',`DESCRIPTION:${icsEscape((a.title||'Assignment')+' is due in 2 hours')}`,'END:VALARM','END:VEVENT');
+      for(let i=0;i<(a.steps||[]).length;i++){
+        const s=a.steps[i];if(!s?.[3]||s?.[2])continue;
+        const target=new Date(`${s[3]}T09:00:00`);if(Number.isNaN(target.valueOf()))continue;
+        lines.push('BEGIN:VEVENT',`UID:${icsEscape('reach-step-'+a.id+'-'+i+'@student-planner')}`,`DTSTAMP:${stamp}`,`DTSTART:${icsStamp(target)}`,`DTEND:${icsStamp(new Date(target.getTime()+Math.max(15,Number(s[1]||30))*60000))}`,`SUMMARY:${icsEscape(s[0]||'Study task')}`,`DESCRIPTION:${icsEscape((a.title||'Assignment')+(a.unit?' · '+a.unit:''))}`,'BEGIN:VALARM','TRIGGER:-PT15M','ACTION:DISPLAY',`DESCRIPTION:${icsEscape('A small study step is ready when you are')}`,'END:VALARM','END:VEVENT');
+      }
+    }
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+  function downloadReminderCalendar(){
+    if(!(state.assignments||[]).some(a=>a?.due)){toast('Add an assignment first');return}
+    const blob=new Blob([buildReminderCalendar()],{type:'text/calendar;charset=utf-8'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download='REACH-Student-Planner-Reminders.ics';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('Calendar reminders downloaded');
+  }
+
   function diagnosticSummary(){
     ensureStateShape();
     return [
@@ -571,7 +607,7 @@
       <div class="card"><form id="smartAssignmentBrief">
         <div class="field"><label>Upload brief</label><div class="file-box"><input type="file" name="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"></div><div class="sub">PDF, DOCX or TXT. Scanned PDFs are read with on-device OCR when needed.</div></div>
         <div class="field"><label>Or paste the assignment brief / instructions</label><textarea class="textarea" name="brief" placeholder="Paste the actual instructions here...">${esc(d.briefText||d.brief||'')}</textarea></div>
-        <div class="notice"><strong>Privacy:</strong> the document is read in your browser. The original file is not uploaded. If you sign in, the extracted text and planning data can be synced to your account.</div>
+        <div class="notice"><strong>Privacy:</strong> the document is read in your browser. The original file is not uploaded. If you sign in, the extracted text and planning data can be synced to your account.</div><div class="notice" style="margin-top:10px"><strong>Academic integrity:</strong> REACH identifies requirements and planning cues only. It will not write assessment content for you. Check your unit's AI rules before using any external AI tool.</div>
         <div class="toolbar"><button class="btn btn-outline" type="button" data-nav="add-assignment">← Back</button><button class="btn btn-primary" id="readBriefButton" type="submit">Read brief & continue →</button></div>
       </form></div></div>`;
   };
@@ -673,7 +709,7 @@
 
   const priorSettingsView=views.settings;
   views.settings=function(){
-    const base=priorSettingsView();
+    const base=priorSettingsView().replace('Optional browser reminders while the app/PWA is open. Permission required.','Browser reminders when supported. For reliable reminders while the app is closed, export your study calendar below.');
     const account=authUser?`<div class="card" style="margin-top:16px"><h2>Your account</h2><div class="auth-panel"><div><strong>${esc(authUser.email||'Signed in')}</strong><div class="sync-state">Your planner can sync through REACH Student Planner’s Supabase account storage.</div></div><button class="btn btn-soft" id="syncNow">Sync now</button><div class="toolbar"><button class="btn btn-outline" id="signOutAccount">Sign out</button><button class="btn btn-outline" id="signOutAndClear">Sign out & clear this device</button></div><button class="btn btn-outline" id="deleteCloudPlanner">Delete my synced planner data</button><button class="btn btn-danger" id="deleteAccountCompletely">Delete my account permanently</button></div></div>`:
       `<div class="card" style="margin-top:16px"><h2>Account & sync</h2><div class="sub">You can keep using the planner only on this device, or create an account to sync your profile, units, assignments, extracted brief text, plans, rewards and progress across devices.</div><form id="authForm" class="auth-panel" style="margin-top:12px"><input class="input" type="email" name="email" autocomplete="email" placeholder="Email" required><input class="input" type="password" name="password" autocomplete="current-password" minlength="10" placeholder="Password (10+ characters)" required><div class="toolbar"><button class="btn btn-primary" type="submit" data-auth-action="signin">Sign in</button><button class="btn btn-outline" type="button" id="createAccount">Create account</button></div><button class="btn btn-outline" type="button" id="forgotPassword">Forgot password</button></form><div class="notice" style="margin-top:12px">Account sync is optional. Email confirmation may be required after sign-up. The original uploaded brief file is not stored in the cloud.</div></div>`;
     const recovery=authRecoveryMode?`<div class="card" style="margin-top:16px"><h2>Choose a new password</h2><form id="passwordRecoveryForm" class="auth-panel"><input class="input" type="password" name="password" autocomplete="new-password" minlength="10" placeholder="New password (10+ characters)" required><button class="btn btn-primary" type="submit">Update password</button></form></div>`:'';
@@ -690,6 +726,8 @@
         <div class="notice" style="margin-top:12px">The app never sends progress automatically. “Email my win” opens a pre-filled email on the student’s device so they can review it before sending.</div>
       </div>
       <div class="card" style="margin-top:16px"><h2>Install REACH Student Planner</h2><div class="sub">${esc(installHelp)}</div>${!installed&&deferredInstallPrompt?'<button class="btn btn-primary" id="installAppButton" style="margin-top:12px">Install app</button>':''}</div>
+      <div class="card" style="margin-top:16px"><h2>Reliable reminders when the app is closed</h2><div class="sub">Browser notifications are not guaranteed when a web app is fully closed. Download your REACH study calendar to use your phone/computer's native calendar reminders instead.</div><button class="btn btn-primary" id="downloadReminderCalendar" style="margin-top:12px">Download calendar reminders (.ics)</button><div class="notice" style="margin-top:12px">Re-download after changing assignment deadlines or target dates so your device calendar stays current.</div></div>
+      <div class="card" style="margin-top:16px"><h2>Academic integrity</h2><div class="sub">REACH helps students interpret instructions, compare their own understanding with the brief, and plan their time. It does not generate assignment answers, paragraphs, references or citations.</div><ul class="privacy-list"><li>Always follow the AI and academic-integrity rules for the specific unit and assessment.</li><li>Students remain responsible for the ideas, analysis, writing and sources they submit.</li><li>Brief analysis is planning support only; students should verify requirements against the official brief and marking rubric.</li></ul></div>
       <div class="card" style="margin-top:16px"><div class="page-head" style="margin-bottom:8px"><div><h2>System status</h2><div class="sub">Useful if REACH support needs to troubleshoot. This summary contains no assignment text, names, email addresses or uploaded documents.</div></div><span class="status">v${RELEASE_VERSION}</span></div>
         <div class="grid g2"><div class="kpi"><strong>${navigator.onLine?'Online':'Offline'}</strong><span>Connection</span></div><div class="kpi"><strong>${installed?'Installed':'Browser'}</strong><span>App mode</span></div><div class="kpi"><strong>${authUser?'Signed in':'Local'}</strong><span>Account</span></div><div class="kpi"><strong>${state.lastCloudSyncAt?'Synced':'—'}</strong><span>Cloud status</span></div></div>
         <button class="btn btn-outline" id="copyDiagnostics" style="margin-top:12px">Copy diagnostic summary</button>
@@ -1060,6 +1098,7 @@
       deferredInstallPrompt=null;render();
     });
 
+    const cal=root.querySelector('#downloadReminderCalendar');if(cal)cal.addEventListener('click',downloadReminderCalendar);
     const diag=root.querySelector('#copyDiagnostics');if(diag)diag.addEventListener('click',async()=>{
       try{await navigator.clipboard.writeText(diagnosticSummary());toast('Diagnostic summary copied')}
       catch{toast('Could not copy diagnostics on this device')}
