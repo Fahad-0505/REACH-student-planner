@@ -3,7 +3,7 @@
 A mobile-first, ADHD-friendly student planning and study-wellbeing web application developed for REACH ADHD Coaching & Consultancy.
 
 ## Production app
-https://reach-adhd-student-planner.onrender.com
+https://reach-student-planner-final-v4.onrender.com
 
 ## Purpose
 The planner helps students reduce overwhelm by turning assessment requirements into manageable steps, planning study around real-life commitments, using short focus blocks, recognising progress positively, choosing meaningful self-rewards and optionally sharing study wins with a trusted support person.
