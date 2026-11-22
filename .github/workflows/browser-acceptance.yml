@@ -3,7 +3,31 @@ name: Browser acceptance tests
 on:
   push:
     branches: [main]
+    paths:
+      - 'index.html'
+      - 'wellbeing-release.js'
+      - 'release-patch.js'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'assets/**'
+      - 'tests/e2e/**'
+      - 'playwright.config.js'
+      - '.github/workflows/browser-acceptance.yml'
   pull_request:
+    paths:
+      - 'index.html'
+      - 'wellbeing-release.js'
+      - 'release-patch.js'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'assets/**'
+      - 'tests/e2e/**'
+      - 'playwright.config.js'
+      - '.github/workflows/browser-acceptance.yml'
+
+concurrency:
+  group: browser-acceptance-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
