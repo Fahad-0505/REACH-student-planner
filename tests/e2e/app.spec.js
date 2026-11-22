@@ -103,7 +103,6 @@ test('assignment brief, understanding check, custom plan, accountability and rew
   await expect(page.getByText(/confidence 8\/10/i)).toBeVisible();
 
   await page.getByRole('button', { name: /Assignments/i }).click();
-  await page.getByRole('button', { name: 'View plan' }).click();
   await page.locator('button.check').nth(1).click();
   await page.getByRole('button', { name: /Progress/i }).click();
 
